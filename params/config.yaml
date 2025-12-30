@@ -1,0 +1,36 @@
+# --- PROJECT SETTINGS ---
+project_name: "SPQA"
+mode: "train"             # train or test
+method: "MC"              # "MC" or "TTA" or "Ensemble"
+seed: 42                  
+
+# --- MODEL ARCHITECTURE ---
+model:
+  architecture: "unet"
+  in_channels: 1          
+  n_classes: 1            # Binary segmentation
+  channels: 64            # Base filter size 
+  dropout_rate: 0.2       # MC Uncertainty
+
+# --- DATA CONFIGURATION ---
+Data:
+  training_ids: "C:\Users\97252\SPQA\fold_4\training_ids.txt"
+  raw_data_root: "C:\Users\97252\SPQA\synthstrip_data_v1.5"
+  image_size: [256, 256]
+
+# --- TRAINING HYPERPARAMETERS ---
+Train:
+  batch_size: 1           
+  epochs: 100             
+  learning_rate: 0.0001
+  patience: 15            
+  save_dir: "./logs/checkpoints"
+
+# --- QUALITY CONTROL (DAE) SETTINGS ---
+DAE:
+  enabled: True
+  # This is where the QC model will be saved/loaded
+  checkpoint: "./logs/checkpoints/best_dae_model.pth"
+  in_channels= 2
+  # Advanced: If you use the Adversarial DAE (trainer.py), enable this
+  use_adversarial: False
