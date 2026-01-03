@@ -1,8 +1,17 @@
 import torch
+import torch.nn as nn
 
 
 def monte_carlo_dropout_predict(model, inputs, num_samples=10):
-    model.eval()  # Keep dropout layers active
+    # 1. Set model to eval mode (freezes BatchNorm)
+    model.eval()
+
+    def enable_dropout(m):
+        if type(m) == nn.Dropout:
+            m.train()
+
+    model.apply(enable_dropout)
+
     predictions = []
 
     with torch.no_grad():
@@ -10,9 +19,8 @@ def monte_carlo_dropout_predict(model, inputs, num_samples=10):
             output = torch.sigmoid(model(inputs))
             predictions.append(output)
 
-    # Stack samples: (num_samples, batch, channel, h, w)
+    # Shape: (num_samples, batch, channel, h, w)
     predictions_stack = torch.stack(predictions)
-    # Get max probabilities for uncertainty calculation
-    predictions_max = predictions_stack.max(dim=1)[0]
 
-    return predictions_stack, predictions_max
+    # usually you return the stack, or the mean/std across dim=0 (samples)
+    return predictions_stack

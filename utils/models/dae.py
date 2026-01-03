@@ -120,9 +120,42 @@ class DAE(nn.Module):
     def get_encoder_features(self, x: torch.Tensor) -> torch.Tensor:
         return self.encode(x)
 
-
 class Discriminator(nn.Module):
     def __init__(self, in_channels=1, num_features=16):
+        """
+        A simple Conv-based discriminator that outputs a single probability.
+        """
         super().__init__()
         self.main = nn.Sequential(
-            nn.Conv2d(in_channels, num_features, kernel_size=4, stride=
+            # Block 1: (B, 1, 256, 256) -> (B, 16, 128, 128)
+            nn.Conv2d(in_channels, num_features, kernel_size=4, stride=2, padding=1),
+            nn.LeakyReLU(0.2, inplace=True),
+
+            # Block 2: (B, 16, 128, 128) -> (B, 32, 64, 64)
+            nn.Conv2d(num_features, num_features*2, kernel_size=4, stride=2, padding=1),
+            nn.BatchNorm2d(num_features*2),
+            nn.LeakyReLU(0.2, inplace=True),
+
+            # Block 3: (B, 32, 64, 64) -> (B, 64, 32, 32)
+            nn.Conv2d(num_features*2, num_features*4, kernel_size=4, stride=2, padding=1),
+            nn.BatchNorm2d(num_features*4),
+            nn.LeakyReLU(0.2, inplace=True),
+
+            # Block 4: (B, 64, 32, 32) -> (B, 1, 29, 29) - Output layer
+            # We output a "PatchGAN" style map or we can flatten it.
+            # Here we reduce to 1 channel logits.
+            nn.Conv2d(num_features*4, 1, kernel_size=4, stride=1, padding=0),
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Args:
+            x: Tensor of shape (B, in_channels, H, W).
+        Returns:
+            (B, 1) or (B, 1, H', W') raw logits.
+        """
+        out = self.main(x)
+        # Global Average Pooling to get a single score per image
+        out = torch.mean(out, dim=[2, 3], keepdim=True)
+        out = out.view(out.size(0), -1) # Flatten to (B, 1)
+        return out

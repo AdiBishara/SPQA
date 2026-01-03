@@ -177,7 +177,7 @@ def compute_predictions_and_metrics(model, data_loader, device, output_folder, m
         pbar = tqdm(enumerate(BackgroundGenerator(data_loader)), total=len(data_loader))
         for itr, (test_images, test_annotations, name) in pbar:
             subject_id = name[0].split('_slice_')[0]
-            test_images = (test_images / 255).to(device=device, dtype=torch.float32).squeeze(1)
+            test_images = test_images.to(device=device, dtype=torch.float32).squeeze(1)
             test_annotations = test_annotations.to(device=device, dtype=torch.long).squeeze(1)
 
             if method == "MC":

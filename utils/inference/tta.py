@@ -35,7 +35,7 @@ def tta_predict_10_augs(model, inputs, transforms_list):
             elif t == 'rotate_90':
                 output = TF.rotate(output, -90)
             elif t == 'rotate_180':
-                aug_input = TF.rotate(inputs, 180)
+                output = TF.rotate(inputs, 180)
             predictions.append(output)
 
     predictions_stack = torch.stack(predictions)
