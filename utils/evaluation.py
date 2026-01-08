@@ -1,284 +1,212 @@
-import numpy as np
-from scipy.spatial.distance import directed_hausdorff
-from scipy.ndimage import distance_transform_edt
-from skimage.morphology import binary_erosion
 import os
 import torch
 import pandas as pd
-from tqdm import tqdm
-from PIL import Image
-from torchvision import transforms
-from medpy import metric
-import pickle
-import torch.nn.functional as F
-from prefetch_generator import BackgroundGenerator
-from utils.visualization import plot_and_save_images, plot_segmentation_results_final
-from utils.transformations import forward_transform, inverse_transform
-from utils.inference import tta, ensemble, mc_dropout
-from utils.seeding import fix_seeds
-import cv2
+import numpy as np
 import matplotlib.pyplot as plt
-import nibabel as nib # Ensure nibabel is imported
+from typing import Optional, List, Dict
+from torch.utils.data import DataLoader
+import torch.nn.functional as F
 
-# Set global seed
-fix_seeds(42)
 
-def calculate_metric_perslice_fullhd(pred, gt):
+# --- METRICS & HELPERS ---
+
+def dice_coeff_metric(pred, target):
+    """Computes the Dice Coefficient."""
     smooth = 1e-6
-    intersection = np.sum(pred * gt)
-    union = np.sum(pred) + np.sum(gt)
+    pred_flat = pred.view(-1)
+    target_flat = target.view(-1)
+    intersection = (pred_flat * target_flat).sum()
+    return (2. * intersection + smooth) / (pred_flat.sum() + target_flat.sum() + smooth)
 
-    dice =  (2.0 * intersection + smooth) / (union + smooth)
 
-    pred[pred > 0] = 1
-    gt[gt > 0] = 1
-    if pred.sum() > 0 and gt.sum() > 0:
-        myhd = metric.binary.hd(pred, gt)
-        return dice, myhd , pred.sum() , gt.sum()
-    elif pred.sum() == 0 and gt.sum() == 0:
-        return dice, 0, pred.sum(), gt.sum()
-    else:
-        return dice, 0 , pred.sum() , gt.sum()
+def compute_uncertainty_map(predictions: torch.Tensor):
+    """Calculates pixel-wise uncertainty (Variance)."""
+    # predictions: (Batch, Samples, Channels, H, W)
+    # Variance across dim=1 (Samples)
+    return torch.var(predictions, dim=1)
 
-def dice_coefficient_np(prediction, target, smooth=1e-6):
-    intersection = np.sum(prediction * target)
-    union = np.sum(prediction) + np.sum(target)
-    return (2.0 * intersection + smooth) / (union + smooth), np.sum(prediction), np.sum(target)
 
-def dice_coefficient(y_true, y_pred, epsilon=1e-7):
-    intersection = np.sum(y_true * y_pred)
-    sum_masks = np.sum(y_true) + np.sum(y_pred)
-    return (2. * intersection + epsilon) / (sum_masks + epsilon)
+def compute_uncertainty_scalar(uncertainty_map: torch.Tensor):
+    return uncertainty_map.mean().item()
 
-def hausdorff_distance(y_true, y_pred):
-    coords_true = np.argwhere(y_true)
-    coords_pred = np.argwhere(y_pred)
 
-    if coords_true.size == 0 or coords_pred.size == 0:
-        return np.inf
+def force_dropout_on(model):
+    """Finds all dropout layers and forces them to TRAIN mode."""
+    count = 0
+    for m in model.modules():
+        if isinstance(m, (torch.nn.Dropout, torch.nn.Dropout2d, torch.nn.Dropout3d)):
+            m.train()
+            count += 1
+    return count
 
-    forward_hd = directed_hausdorff(coords_true, coords_pred)[0]
-    backward_hd = directed_hausdorff(coords_pred, coords_true)[0]
-    return max(forward_hd, backward_hd)
 
-def binary_cross_entropy(target, output, epsilon=1e-7):
-    output = np.clip(output, epsilon, 1 - epsilon)
-    bce = -(target * np.log(output) + (1 - target) * np.log(1 - output))
-    return np.mean(bce)
+# -------------------------
 
-def hamming_distance(target, output):
-    return np.mean(target != output)
+def evaluate_segmentation_quality(
+        prediction: torch.Tensor,
+        target: torch.Tensor,
+        uncertainty_map: torch.Tensor,
+        uncertainty_scalar: float,
+        dae_model: Optional[torch.nn.Module] = None,
+        dae_adv_model: Optional[torch.nn.Module] = None
+) -> Dict[str, float]:
+    metrics = {}
 
-def compute_uncertainty(class_probabilities, class_probabilities_max):
-    mean_class_probabilities = torch.mean(class_probabilities, dim=0)
-    mean_class_probabilities_max = torch.mean(class_probabilities_max.float(), dim=0)
+    pred_binary = (prediction > 0.5).float()
+    target_binary = (target > 0.5).float()
 
-    entropy = -torch.sum(mean_class_probabilities * torch.log(mean_class_probabilities + 1e-9), dim=0)
-    variance = torch.mean(class_probabilities * (1 - class_probabilities), dim=0).sum(dim=0)
+    metrics['dice_score'] = dice_coeff_metric(pred_binary, target_binary).item()
 
-    mean_entropy = torch.mean(entropy)
-    mean_variance = torch.mean(variance)
+    intersection = (pred_binary * target_binary).sum()
+    union = pred_binary.sum() + target_binary.sum() - intersection
+    metrics['iou'] = (intersection / (union + 1e-6)).item()
 
-    mean_prediction_map = torch.mean(mean_class_probabilities, dim=0)
+    metrics['uncertainty_scalar'] = uncertainty_scalar
+    metrics['uncertainty_mean'] = uncertainty_map.mean().item()
+    metrics['uncertainty_max'] = uncertainty_map.max().item()
 
-    normalized_entropy = entropy / (mean_prediction_map + 1e-6)
-    normalized_variance = variance / (mean_prediction_map + 1e-6)
+    return metrics
 
-    normalized_entropy_area = normalized_entropy.sum()
-    normalized_variance_area = normalized_variance.sum()
 
-    total_pixels = entropy.numel()
-    normalized_entropy_fraction = normalized_entropy_area / total_pixels
-    normalized_variance_fraction = normalized_variance_area / total_pixels
+def save_visualization(image, target, prediction, uncertainty, save_path, subject_id, metrics):
+    plt.figure(figsize=(12, 4))
 
-    return (class_probabilities, mean_class_probabilities, entropy, variance,
-            mean_entropy, mean_variance,
-            normalized_entropy_area, normalized_entropy_fraction,
-            normalized_variance_area, normalized_variance_fraction)
+    plt.subplot(1, 4, 1)
+    plt.imshow(image.squeeze().cpu().numpy(), cmap='gray')
+    plt.title(f"Image: {subject_id}")
+    plt.axis('off')
 
-def compute_dice_and_hd(pred_samples, groundtruth):
-    num_samples = len(pred_samples)
-    pred_mean = np.mean(pred_samples, axis=0, keepdims=True) 
+    plt.subplot(1, 4, 2)
+    plt.imshow(target.squeeze().cpu().numpy(), cmap='gray')
+    plt.title("Ground Truth")
+    plt.axis('off')
 
-    pred_mean = torch.from_numpy(pred_mean)
-    pred_mean_argmax = pred_mean.max(1, keepdim=True)[1]
-    pred_mean_argmax = pred_mean_argmax.numpy()
-    dice_coefficients = []
-    hausdorff_distances = []
-    
-    for samp_no in range(num_samples):
-        sample_torch = torch.from_numpy(np.expand_dims(pred_samples[samp_no], axis=0))
-        sample_torch_argmax = sample_torch.max(1, keepdim=True)[1]
-        sample_torch_argmax = sample_torch_argmax.numpy()
-        
-        dice,_,_ = dice_coefficient_np(sample_torch_argmax[0,0], pred_mean_argmax[0,0])
-        dice_coefficients.append(dice)
+    plt.subplot(1, 4, 3)
+    plt.imshow(prediction.squeeze().cpu().numpy(), cmap='gray')
+    plt.title(f"Pred (Dice: {metrics['dice_score']:.2f})")
+    plt.axis('off')
 
-        _, hd , pred_sum , gt_sum = calculate_metric_perslice_fullhd(sample_torch_argmax, pred_mean_argmax)
-        hausdorff_distances.append(hd)
+    plt.subplot(1, 4, 4)
+    plt.imshow(uncertainty.squeeze().cpu().numpy(), cmap='jet')
+    plt.title(f"Uncertainty: {metrics['uncertainty_scalar']:.3f}")
+    plt.axis('off')
 
-    dice_coefficients = np.array(dice_coefficients)
-    hausdorff_distances = np.array(hausdorff_distances)
-    gt_dice, pred_sum_f , gt_sum_f  = dice_coefficient_np(pred_mean_argmax[0,0], groundtruth.cpu().numpy())
-    
-    def compute_statistics(values):
-        mean = np.mean(values)
-        median = np.median(values)
-        std = np.std(values)
-        var = np.var(values)
-        minimum = np.min(values)
-        maximum = np.max(values)
-        return {
-            "mean": mean, "median": median, "std": std, "variance": var, "min": minimum, "max": maximum,
-        }
+    plt.tight_layout()
+    plt.savefig(save_path)
+    plt.close()
 
-    dice_stats = compute_statistics(dice_coefficients)
-    hd_stats = compute_statistics(hausdorff_distances)
-    
-    return {
-        "Dice_Statistics": dice_stats,
-        "Hausdorff_Distance_Statistics": hd_stats,
-        "GT_Dice": gt_dice,
-        "pred_sum_f": pred_sum_f,
-        "pred_mean_argmax": pred_mean_argmax
-    }
 
-def compute_dice(mask1, mask2):
-    mask1 = mask1.astype(bool)
-    mask2 = mask2.astype(bool)
-    intersection = np.logical_and(mask1, mask2).sum()
-    dice = 2. * intersection / (mask1.sum() + mask2.sum())
-    return dice 
-    
-def compute_hd(mask1, mask2):
-    coords1 = np.argwhere(mask1)
-    coords2 = np.argwhere(mask2)
-    if len(coords1) == 0 or len(coords2) == 0:
-        return 0.0, 0.0
-    hd_1to2 = directed_hausdorff(coords1, coords2)[0]
-    hd_2to1 = directed_hausdorff(coords2, coords1)[0]
-    return hd_1to2, hd_2to1
+def compute_predictions_and_metrics(
+        model: torch.nn.Module,
+        data_loader: DataLoader,
+        device: torch.device,
+        output_folder: str,
+        method: str = "mc_dropout",
+        model_dae: Optional[torch.nn.Module] = None,
+        model_dae_adv: Optional[torch.nn.Module] = None
+) -> pd.DataFrame:
+    # 1. Start with Eval (locks BatchNorm)
+    model.eval()
+    if model_dae: model_dae.eval()
+    if model_dae_adv: model_dae_adv.eval()
 
-def compute_chamfer_distance(mask1, mask2):
-    mask1 = (mask1 > 0).astype(np.uint8)
-    mask2 = (mask2 > 0).astype(np.uint8)
-    dist1 = cv2.distanceTransform(1 - mask2, cv2.DIST_L2, 3)
-    dist2 = cv2.distanceTransform(1 - mask1, cv2.DIST_L2, 3)
-    chamfer_1to2 = dist1[mask1.astype(bool)].mean() if mask1.sum() > 0 else 0
-    chamfer_2to1 = dist2[mask2.astype(bool)].mean() if mask2.sum() > 0 else 0
-    return chamfer_1to2 , chamfer_2to1    
+    results = []
+    print(f"Starting inference on {len(data_loader)} slices...")
 
-def compute_predictions_and_metrics(model, data_loader, device, output_folder, method, model_dae, model_dae_adv):
-    metrics_data = []
-    current_vol_data = []
-    current_subject = None
-    
-    with torch.no_grad():
-        pbar = tqdm(enumerate(BackgroundGenerator(data_loader)), total=len(data_loader))
-        for itr, (test_images, test_annotations, name) in pbar:
-            subject_id = name[0].split('_slice_')[0]
-            test_images = test_images.to(device=device, dtype=torch.float32).squeeze(1)
-            test_annotations = test_annotations.to(device=device, dtype=torch.long).squeeze(1)
+    # Flag to print debug info only once
+    debug_printed = False
 
-            if method == "MC":
-                predictions, predictions_max = mc_dropout.monte_carlo_dropout_predict(model, test_images, num_samples=10)
-            elif method == "deep_ensemble":
-                predictions, predictions_max = ensemble.deep_ensemble_predict(model, test_images)
-            elif method == "TTA":
-                tta_transforms = tta.get_tta_transforms()
-                predictions, predictions_max = tta.tta_predict_10_augs(model, test_images, tta_transforms)
+    for i, (test_images, test_masks, subject_ids) in enumerate(data_loader):
+        test_images = test_images.to(device)
+        test_masks = test_masks.to(device)
 
-            (class_probabilities, mean_class_probabilities, entropy, variance,
-             mean_entropy, mean_variance,
-             normalized_entropy_area, normalized_entropy_fraction,
-             normalized_variance_area, normalized_variance_fraction) = compute_uncertainty(predictions, predictions_max)
+        # Ensure 4D (Batch, Channel, H, W)
+        if len(test_images.shape) == 3:
+            test_images = test_images.unsqueeze(1)
 
-            out = compute_dice_and_hd(class_probabilities.cpu().numpy(), test_annotations[0])
-            pred_array = out['pred_mean_argmax'][0, 0].astype(np.float32)
-            pred_tensor = torch.from_numpy(pred_array).to(device=device)
-            
-            # Prepare Input for DAE: Stack [Image + Mask]
-            dae_input = torch.cat([
-                forward_transform(test_images).unsqueeze(0), 
-                forward_transform(pred_tensor.unsqueeze(0).unsqueeze(0))
-            ], dim=1)
-            
-            # FIX: Feed dae_input (2 channels) instead of transformed_img (1 channel)
-            outputs_dae = torch.sigmoid(model_dae(dae_input))
+        # --- MC DROPOUT INFERENCE ---
+        if method == "mc_dropout":
 
-            target_np = pred_tensor.cpu().numpy().astype(np.uint8)
-            output_np_dae = outputs_dae[0, 0].cpu().numpy()
-            
-            # Visualize the result before inverse transform
-            output_np_dae_bin = (output_np_dae > 0.5).astype(np.uint8)
+            # A. FORCE DROPOUT ON
+            active_layers = force_dropout_on(model)
 
-            # Inverse transform to map back to original size for metric calculation
-            pred_tensor2 = torch.from_numpy(output_np_dae_bin).to(device=device)
-            output_np_gt_dae = inverse_transform(pred_tensor2.unsqueeze(0).unsqueeze(0)).cpu().numpy()
-            output_np_gt_dae = (output_np_gt_dae[0][0] > 0.5).astype(np.uint8)
-            target_np = (target_np > 0.5).astype(np.uint8)
+            # B. PARANOID CHECK (Print status once)
+            if not debug_printed:
+                # Grab the first dropout layer to verify
+                for m in model.modules():
+                    if isinstance(m, (torch.nn.Dropout, torch.nn.Dropout2d)):
+                        print(f"DEBUG CHECK: Dropout Layer Mode is TRAIN? -> {m.training}")
+                        break
+                print(f"DEBUG CHECK: Forced {active_layers} layers to Train Mode.")
+                debug_printed = True
 
-            dice_score_val_dae = dice_coefficient(target_np, output_np_gt_dae)
-            hausdorff_dist_dae = hausdorff_distance(target_np, output_np_gt_dae)
+            # C. RUN SAMPLES
+            mc_outputs = []
+            num_samples = 10
 
-            plot_segmentation_results_final(
-                test_images, test_annotations, out, entropy, variance, output_np_gt_dae, name, output_folder
+            with torch.no_grad():
+                for _ in range(num_samples):
+                    logits = model(test_images)
+                    probs = torch.sigmoid(logits)
+                    mc_outputs.append(probs)
+
+            # Stack (Batch, Samples, C, H, W)
+            predictions = torch.stack(mc_outputs, dim=1)
+
+            # D. CALCULATE METRICS
+            uncertainty_map = compute_uncertainty_map(predictions)
+            uncertainty_scalar = compute_uncertainty_scalar(uncertainty_map)
+            final_pred = (predictions.mean(dim=1) > 0.5).float()
+
+        else:
+            with torch.no_grad():
+                output = torch.sigmoid(model(test_images))
+            final_pred = (output > 0.5).float()
+            uncertainty_map = torch.zeros_like(final_pred)
+            uncertainty_scalar = 0.0
+
+        # --- QC CHECKS ---
+        rec_error_dae = 0.0
+        if model_dae:
+            with torch.no_grad():
+                dae_input = torch.cat([test_images, final_pred], dim=1)
+                reconstruction = torch.sigmoid(model_dae(dae_input))
+                rec_error_dae = F.mse_loss(reconstruction, final_pred).item()
+
+        rec_error_gan = 0.0
+        if model_dae_adv:
+            with torch.no_grad():
+                dae_input = torch.cat([test_images, final_pred], dim=1)
+                reconstruction_adv = torch.sigmoid(model_dae_adv(dae_input))
+                rec_error_gan = F.mse_loss(reconstruction_adv, final_pred).item()
+
+        # --- SAVE RESULTS ---
+        for b in range(test_images.size(0)):
+            subj_id = subject_ids[b] if isinstance(subject_ids, list) else subject_ids
+
+            current_metrics = evaluate_segmentation_quality(
+                final_pred[b],
+                test_masks[b],
+                uncertainty_map[b],
+                uncertainty_scalar
             )
-            
-            dice_score = compute_dice(target_np, output_np_gt_dae)
-            hd1, hd2 = compute_hd(target_np, output_np_gt_dae)
-            chamfer1, chamfer2 = compute_chamfer_distance(target_np, output_np_gt_dae)
-            
-            metrics_row = {
-                'Image_Name': name[0],
-                'mean_entropy': mean_entropy.item(),
-                'mean_variance': mean_variance.item(),
-                'normalized_entropy_area': normalized_entropy_area.item(),
-                'normalized_entropy_fraction': normalized_entropy_fraction.item(),
-                'normalized_variance_area': normalized_variance_area.item(),
-                'normalized_variance_fraction': normalized_variance_fraction.item(),
-                'dice_mean': out["Dice_Statistics"]["mean"],
-                'dice_max': out["Dice_Statistics"]["max"],
-                'dice_min': out["Dice_Statistics"]["min"],
-                'dice_std': out["Dice_Statistics"]["std"],
-                'dice_variance': out["Dice_Statistics"]["variance"],
-                'hd_mean': out["Hausdorff_Distance_Statistics"]["mean"],
-                'hd_max': out["Hausdorff_Distance_Statistics"]["max"],
-                'hd_min': out["Hausdorff_Distance_Statistics"]["min"],
-                'hd_std': out["Hausdorff_Distance_Statistics"]["std"],
-                'hd_variance': out["Hausdorff_Distance_Statistics"]["variance"],
-                'gt_dice': out['GT_Dice'],
-                'mean_pred_sum': out['pred_sum_f'],
-                "Dice_DAE": dice_score_val_dae,
-                "Hausdorff_DAE": hausdorff_dist_dae,
-                'Dice_D': dice_score,
-                'HD1_D': hd1,
-                'HD2_D': hd2,
-                'CHD1_D':chamfer1,
-                'CHD2_D':chamfer2,
-            }
-            
-            # --- 3D Reconstruction Logic ---
-            # Save the CLEANED slice (inverse transformed to match original size)
-            cleaned_slice_final = output_np_gt_dae 
-            
-            if current_subject is not None and subject_id != current_subject:
-                # Save previous volume
-                if current_vol_data:
-                    vol_3d = np.stack(current_vol_data, axis=2)
-                    nifti_img = nib.Nifti1Image(vol_3d, affine=np.eye(4))
-                    nib.save(nifti_img, os.path.join(output_folder, f"{current_subject}_reconstructed.nii.gz"))
-                    print(f"Saved 3D volume for {current_subject}")
-                current_vol_data = [] # Reset
 
-            current_subject = subject_id
-            current_vol_data.append(cleaned_slice_final)
-            metrics_data.append(metrics_row)
-            
-        # Save the last volume after loop ends
-        if current_subject is not None and current_vol_data:
-            vol_3d = np.stack(current_vol_data, axis=2)
-            nifti_img = nib.Nifti1Image(vol_3d, affine=np.eye(4))
-            nib.save(nifti_img, os.path.join(output_folder, f"{current_subject}_reconstructed.nii.gz"))    
-    
-    return pd.DataFrame(metrics_data)
+            current_metrics['rec_error_dae'] = rec_error_dae
+            current_metrics['rec_error_gan'] = rec_error_gan
+            current_metrics['subject_id'] = subj_id
+
+            results.append(current_metrics)
+
+            save_path = os.path.join(output_folder, f"{subj_id}_result.png")
+            save_visualization(
+                test_images[b],
+                test_masks[b],
+                final_pred[b],
+                uncertainty_map[b],
+                save_path,
+                subj_id,
+                current_metrics
+            )
+
+    df = pd.DataFrame(results)
+    return df

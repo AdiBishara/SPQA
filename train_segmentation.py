@@ -1,71 +1,87 @@
 import os
 import torch
 import torch.optim as optim
+import torch.nn as nn
+import torch.backends.cudnn as cudnn
 from torch.utils.data import DataLoader
 from utils.config import load_config
-from utils.seeding import fix_seeds
 from utils.data.nifti_loader import NiftiFewShotDataset
 from utils.models.unet_dropout import UNet
-from losses.losses import dice_loss, bce_criterion
+from losses.losses import dice_loss
 
-def train_segmentor():
-    # 1. Load Configuration and Environment
+
+def train_unet():
+    # 1. Load Configuration
     config_path = r"C:\Users\97252\SPQA\params\config.yaml"
-    config = load_config(config_path) [cite: 10]
-    fix_seeds(config.get('seed', 42)) [cite: 13]
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    config = load_config(config_path)
+    print("DEBUG: Loaded Strides:", config['model']['strides'])
+    if torch.cuda.is_available():
+        device = torch.device("cuda")
+        cudnn.benchmark = True
+        print(f"✅ Training on GPU: {torch.cuda.get_device_name(0)} (High Res Mode)")
+    else:
+        device = torch.device("cpu")
 
-    # 2. Data Loader (Few-Shot NIfTI)
-    # This engine handles the 3D-to-2D slicing and heavy augmentation
-    train_dataset = NiftiFewShotDataset(
+    # Save Path
+    save_dir = r"C:\Users\97252\SPQA\logs\checkpoints"
+    os.makedirs(save_dir, exist_ok=True)
+
+
+    # 2. Data Loader
+    dataset = NiftiFewShotDataset(
         data_root=config['Data']['raw_data_root'],
-        id_file=config['Data']['few_shot_ids'],
-        is_train=True,
-        image_size=config['model']['image_size'][0]
+        id_file=config['Data']['training_ids'],
+        image_size=config['model']['image_size'][0]  # This passes 512
     )
-    train_loader = DataLoader(train_dataset, batch_size=config['Train']['batch_size'], shuffle=True)
+
+    loader = DataLoader(
+        dataset,
+        batch_size=config['Train']['batch_size'],  # If you get "Out of Memory", lower this to 4 or 2
+        shuffle=True,
+        num_workers=4,
+        pin_memory=True
+    )
 
     # 3. Model Initialization
-    # We use the UNet with dropout for later MC uncertainty estimation
     model = UNet(
         in_channels=config['model']['in_channels'],
         out_channels=config['model']['n_classes'],
-        channels=config['model']['channels']
-    ).to(device) [cite: 14]
+        channels=config['model']['channels'],
+        strides=config['model']['strides'],
+        dropout=config['model']['dropout_rate']
+    ).to(device)
 
-    optimizer = optim.Adam(model.parameters(), lr=config['Train']['learning_rate'])
+    optimizer = optim.Adam(model.parameters(), lr=config['Train']['learning_rate_gen'])
+    criterion = dice_loss
 
     # 4. Training Loop
-    print("--- Starting UNet Segmentor Training ---")
     model.train()
+
     for epoch in range(config['Train']['epochs']):
         epoch_loss = 0
-        for images, masks, _ in train_loader:
-            images, masks = images.to(device), masks.to(device)
+
+        for images, masks, _ in loader:
+            images = images.to(device)
+            masks = masks.to(device)
 
             optimizer.zero_grad()
-            
-            # Forward pass
-            outputs = model(images)
-            
-            # Combine BCE and Dice Loss for robust segmentation 
-            loss_bce = bce_criterion(outputs, masks)
-            loss_dice = dice_loss(torch.sigmoid(outputs), masks)
-            total_loss = loss_bce + loss_dice
-            
-            total_loss.backward()
+            outputs = torch.sigmoid(model(images))
+            loss = criterion(outputs, masks).mean()
+            loss.backward()
             optimizer.step()
-            
-            epoch_loss += total_loss.item()
-        
-        print(f"Epoch {epoch+1}/{config['Train']['epochs']} - Avg Loss: {epoch_loss/len(train_loader):.4f}")
+            epoch_loss += loss.item()
 
-    # 5. Save the Segmentor Checkpoint
-    save_dir = config['Train']['save_dir']
-    os.makedirs(save_dir, exist_ok=True)
-    save_path = os.path.join(save_dir, "best_unet_model.pth")
-    torch.save(model.state_dict(), save_path)
-    print(f"Segmentor training complete. Model saved at: {save_path}")
+        avg_loss = epoch_loss / len(loader)
+
+        # Save Checkpoint
+        checkpoint_name = f"best_unet_model_epoch{epoch + 1}.pth"
+        save_path = os.path.join(save_dir, checkpoint_name)
+        torch.save(model.state_dict(), save_path)
+
+        print(f"Epoch {epoch + 1}/{config['Train']['epochs']} | Loss: {avg_loss:.4f} -> Saved: {checkpoint_name}")
+
+    print(f"Training Complete.")
+
 
 if __name__ == "__main__":
-    train_segmentor()
+    train_unet()

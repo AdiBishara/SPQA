@@ -10,10 +10,10 @@ model:
   in_channels: 1
   n_classes: 1            # Binary segmentation
   channels: [16, 32, 64, 128, 256]            # Base filter size
-  strides: [1, 2, 2, 2]
+  strides: [2, 2, 2, 2]
   dropout_rate: 0.2       # MC Uncertainty
   image_size: [256, 256]
-  model_path: "C:/Users/97252/SPQA/logs/checkpoints/best_unet_model.pth"
+  model_path: "C:/Users/97252/SPQA/logs/checkpoints/best_unet_model_epoch40.pth"
 # --- DATA CONFIGURATION ---
 Data:
   training_ids: "C:/Users/97252/SPQA/fold_4/training_ids.txt"
@@ -23,9 +23,10 @@ Data:
 
 # --- TRAINING HYPERPARAMETERS ---
 Train:
-  batch_size: 1           
-  epochs: 10
-  learning_rate: 0.0001
+  batch_size: 4
+  epochs: 100
+  learning_rate_gen: 0.0001 # Generator stays at 1e-4
+  learning_rate_disc: 0.00001 # Discriminator reduced to 1e-5 (Stabilizer)
   patience: 15            
   save_dir: "./logs/checkpoints"
 
@@ -33,7 +34,7 @@ Train:
 DAE:
   enabled: True
   # This is where the QC model will be saved/loaded
-  checkpoint_path: "C:/Users/97252/SPQA/logs/checkpoints/best_dae_model_gan.pth"
+  checkpoint_path: "C:/Users/97252/SPQA/logs/ae_checkpoints/dae_normal_epoch_100"
   in_channels: 1
   # Advanced: If you use the Adversarial DAE (trainer.py), enable this
   use_adversarial: False
