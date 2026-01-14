@@ -13,7 +13,7 @@ model:
   strides: [2, 2, 2, 2]
   dropout_rate: 0.2       # MC Uncertainty
   image_size: [256, 256]
-  model_path: "C:/Users/97252/SPQA/logs/checkpoints/best_unet_model_epoch40.pth"
+  model_path: "C:/Users/97252/SPQA/logs/checkpoints/best_unet_model_epoch100.pth"
 # --- DATA CONFIGURATION ---
 Data:
   training_ids: "C:/Users/97252/SPQA/fold_4/training_ids.txt"
@@ -34,7 +34,7 @@ Train:
 DAE:
   enabled: True
   # This is where the QC model will be saved/loaded
-  checkpoint_path: "C:/Users/97252/SPQA/logs/ae_checkpoints/dae_normal_epoch_100"
+  checkpoint_path: "C:/Users/97252/SPQA/logs/gan_checkpoints/dae_gan_epoch_100"
   in_channels: 1
   # Advanced: If you use the Adversarial DAE (trainer.py), enable this
-  use_adversarial: False
+  use_adversarial: True

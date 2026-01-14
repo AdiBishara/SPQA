@@ -7,7 +7,6 @@ from utils.seeding import fix_seeds
 from utils.data.nifti_loader import NiftiFewShotDataset
 from utils.models.dae import DAE
 from losses.losses import dice_loss
-import datetime
 import numpy as np
 
 
