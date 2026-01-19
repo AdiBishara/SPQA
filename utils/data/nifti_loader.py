@@ -5,9 +5,9 @@ import nibabel as nib
 from torch.utils.data import Dataset
 
 
-class NiftiFewShotDataset(Dataset):
-    def __init__(self, data_root, id_file, is_train=True, image_size=(256, 256, 256), transform=None):
-        self.data_root = data_root
+class NiftiDataset(Dataset):
+    def __init__(self, img_dir, list_path, is_train=True, image_size=(256, 256, 256), transform=None):
+        self.data_root = img_dir
         self.is_train = is_train
 
         if isinstance(image_size, int):
@@ -17,17 +17,18 @@ class NiftiFewShotDataset(Dataset):
         else:
             self.target_size = image_size
 
-        with open(id_file, 'r') as f:
+        with open(list_path, 'r') as f:
             self.ids = [line.strip() for line in f.readlines() if line.strip()]
 
-        # Pre-calculate paths to save checking OS inside the loop
         self.file_list = []
         for subject_id in self.ids:
-            img_path = os.path.join(data_root, subject_id, "image.nii.gz")
-            mask_path = os.path.join(data_root, subject_id, "mask.nii.gz")
+            img_path = os.path.join(self.data_root, subject_id, "image.nii.gz")
+            mask_path = os.path.join(self.data_root, subject_id, "mask.nii.gz")
+
             if not os.path.exists(img_path):
                 img_path = img_path.replace(".nii.gz", ".nii")
                 mask_path = mask_path.replace(".nii.gz", ".nii")
+
             self.file_list.append((img_path, mask_path, subject_id))
 
         print(f"--- Fast 3D Loader Initialized ({'Train' if is_train else 'Test'}) ---")
@@ -45,9 +46,10 @@ class NiftiFewShotDataset(Dataset):
             pd1, pd2 = pad_d // 2, pad_d - (pad_d // 2)
             ph1, ph2 = pad_h // 2, pad_h - (pad_h // 2)
             pw1, pw2 = pad_w // 2, pad_w - (pad_w // 2)
+
             img = np.pad(img, ((pd1, pd2), (ph1, ph2), (pw1, pw2)), mode='constant')
             mask = np.pad(mask, ((pd1, pd2), (ph1, ph2), (pw1, pw2)), mode='constant')
-            d, h, w = img.shape  # Update
+            d, h, w = img.shape
 
         # Center Crop
         if d > td or h > th or w > tw:
@@ -60,19 +62,27 @@ class NiftiFewShotDataset(Dataset):
     def __getitem__(self, idx):
         img_path, mask_path, subject_id = self.file_list[idx]
 
-        # Load
-        img = nib.load(img_path).get_fdata().astype(np.float32)
-        mask = nib.load(mask_path).get_fdata().astype(np.float32)
+        try:
+            img = nib.load(img_path).get_fdata().astype(np.float32)
+            mask = nib.load(mask_path).get_fdata().astype(np.float32)
 
-        # Normalize
-        if np.max(img) > 0:
-            img = (img - np.min(img)) / (np.max(img) - np.min(img))
+            # --- CRITICAL FIX: FORCE BINARY MASK ---
+            # If mask has values like 255, this sets them to 1.0
+            # If mask is 0.001 (soft), this sets it to 1.0
+            mask = (mask > 0).astype(np.float32)
+            # ---------------------------------------
 
-        # Resize/Pad Only (Fast)
-        img, mask = self._resize_volume(img, mask)
+            # Normalize Image
+            if np.max(img) > 0:
+                img = (img - np.min(img)) / (np.max(img) - np.min(img))
 
-        # To Tensor
-        img_tensor = torch.from_numpy(img).unsqueeze(0)
-        mask_tensor = torch.from_numpy(mask).unsqueeze(0)
+            img, mask = self._resize_volume(img, mask)
 
-        return img_tensor, mask_tensor, subject_id
+            img_tensor = torch.from_numpy(img).unsqueeze(0)
+            mask_tensor = torch.from_numpy(mask).unsqueeze(0)
+
+            return {'image': img_tensor, 'mask': mask_tensor, 'id': subject_id}
+
+        except Exception as e:
+            print(f"Error loading {subject_id}: {e}")
+            return self.__getitem__((idx + 1) % len(self.ids))

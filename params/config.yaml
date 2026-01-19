@@ -33,7 +33,7 @@ Train:
 
   epochs: 1000
   # Increased LR because batch_size is larger (Linear Scaling Rule)
-  learning_rate_gen: 0.0002
+  learning_rate_gen: 0.0001
 
   patience: 50
   save_dir: "C:/Users/Lab/OneDrive/Desktop/SPQA/logs/checkpoints_ultra"
@@ -43,4 +43,6 @@ QC:
   architecture: "vae3d"
   in_channels: 1          # VAE sees 1 channel (the mask)
   checkpoint_dir: "C:/Users/Lab/OneDrive/Desktop/SPQA/logs/vae_checkpoints"
+
+  best_model_path: "C:/Users/Lab/OneDrive/Desktop/SPQA/logs/vae_checkpoints/vae_epoch_330.pth"
   latent_dim: 2048

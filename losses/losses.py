@@ -2,55 +2,54 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-# --- 1. The missing BCE Criterion ---
-# We use BCEWithLogitsLoss because your UNet output is likely raw logits
-# (based on the fact that you apply torch.sigmoid manually before dice_loss in train_segmentation.py)
+# --- 1. Standard Segmentation Losses ---
 bce_criterion = nn.BCEWithLogitsLoss()
 
 
-# --- 2. The missing Dice Loss ---
 def dice_loss(pred, target, smooth=1e-6):
     """
-    Standard Dice Loss for segmentation.
-    Args:
-        pred: Predicted probabilities (B, C, H, W). Ensure sigmoid is applied if model outputs logits.
-        target: Ground truth masks (B, C, H, W).
+    Standard Dice Loss.
+    Pred: (B, C, H, W) or (B, C, D, H, W) -> Logits or Probabilities
+    Target: (B, C, H, W) or (B, C, D, H, W) -> Binary Mask (0 or 1)
     """
-    # Flatten tensors to simplify calculation
+    # Ensure pred is sigmoid-activated if it comes as raw logits
+    # But usually we handle that outside or assume inputs are effectively probabilities for the calculation
+
     pred = pred.contiguous().view(-1)
     target = target.contiguous().view(-1)
-
     intersection = (pred * target).sum()
-
-    # Dice coefficient formula
     dice = (2. * intersection + smooth) / (pred.sum() + target.sum() + smooth)
-
     return 1 - dice
 
-def boundary_loss(pred, target, boundary_weight=5.0):
-    """
-    Args:
-        pred: Predicted tensor (B, C, H, W) or (B, C, D, H, W)
-        target: Ground truth tensor (same shape as pred)
-        boundary_weight: Weighting factor for the loss
-    """
-    max_pool=0
-    target = target.float()
-    if pred.dim() == 4:
-        max_pool = F.max_pool2d
-    elif pred.dim() == 5:
-        max_pool = F.max_pool3d
-    # Create the Boundary Map
-    target_dilated = max_pool(target, kernel_size=3, stride=1, padding=1)
 
-    target_eroded = -max_pool(-target, kernel_size=3, stride=1, padding=1)
-    
-    boundary_map = target_dilated - target_eroded
+# --- 2. THE MISSING PIECE: VAE LOSS ---
+class VAELoss(nn.Module):
+    def __init__(self, kld_weight=0.005):  # Increased weight to punish "Skull Copying"
+        super(VAELoss, self).__init__()
+        self.kld_weight = kld_weight
 
-    # Calculate Loss
-    diff = torch.abs(pred - target)
-    
-    # Weighted loss focused on boundaries
-    loss = (diff * boundary_map).mean()
+    def forward(self, recon_x, x, mu, logvar):
+        """
+        recon_x: VAE Output (Logits)
+        x:       Target Mask (Ground Truth)
+        mu:      Latent Mean
+        logvar:  Latent Log-Variance
+        """
+        # 1. Reconstruction Loss (Dice + BCE)
+        # We combine Dice (Structure) and BCE (Pixel-wise accuracy) for stability
+        pred_prob = torch.sigmoid(recon_x)
+        d_loss = dice_loss(pred_prob, x)
+        bce_loss = F.binary_cross_entropy_with_logits(recon_x, x)
 
-    return boundary_weight * loss
+        # Weighted Recon Loss (mostly Dice)
+        recon_loss = d_loss + (0.5 * bce_loss)
+
+        # 2. KLD Loss (The "Regularizer")
+        # Forces the model to learn a smooth "Concept" of a brain, not just memorize pixels.
+        # Formula: -0.5 * sum(1 + log(sigma^2) - mu^2 - sigma^2)
+        kld_loss = torch.mean(-0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), dim=1), dim=0)
+
+        # 3. Total Loss
+        total_loss = recon_loss + (self.kld_weight * kld_loss)
+
+        return total_loss, recon_loss, kld_loss

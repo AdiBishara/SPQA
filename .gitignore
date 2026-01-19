@@ -1,4 +1,6 @@
 logs/
 results_evaluation/
 *.pth
-synthstrip_data_v1.5/
+synthstrip_data_v1.5
+train_QC_GAN.py
+

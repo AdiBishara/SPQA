@@ -3,6 +3,7 @@ import sys
 import glob
 import re
 import torch
+import torch.nn.functional as F
 import torch.optim as optim
 from torch.utils.data import DataLoader
 import numpy as np
@@ -10,15 +11,29 @@ import numpy as np
 # Project Imports
 from utils.config import load_config
 from utils.seeding import fix_seeds
-from utils.data.nifti_loader import NiftiFewShotDataset
+from utils.data.nifti_loader import NiftiDataset
 from utils.models.vae import VAE3D
 
 
-# --- DISABLE AUGMENTATION FOR STABILITY ---
-# We remove the GPU Augmentation for the VAE.
-# It needs to learn to reconstruct stable images first.
+# --- DYNAMIC MORPHOLOGICAL CORRUPTION ---
+def morphological_corruption(mask, kernel_size=3, max_iters=5):
+    """Randomly dilates or erodes the mask to create training samples for the QC VAE."""
+    mode = "dilate" if torch.rand(1).item() > 0.5 else "erode"
+    iters = torch.randint(1, max_iters + 1, (1,)).item()
+    pad = kernel_size // 2
+    corrupted = mask.clone()
+    if mode == "dilate":
+        for _ in range(iters):
+            corrupted = F.max_pool3d(corrupted, kernel_size=kernel_size, stride=1, padding=pad)
+    else:
+        corrupted = -corrupted
+        for _ in range(iters):
+            corrupted = F.max_pool3d(corrupted, kernel_size=kernel_size, stride=1, padding=pad)
+        corrupted = -corrupted
+    return corrupted
 
-# --- ROBUST LOSS ---
+
+# --- LOSS HELPERS ---
 def robust_dice_loss(pred, target, smooth=1e-5):
     intersection = (pred * target).sum()
     union = pred.sum() + target.sum()
@@ -26,27 +41,51 @@ def robust_dice_loss(pred, target, smooth=1e-5):
     return 1.0 - dice
 
 
+def get_laplacian_loss(recon_logits, target):
+    """
+    Penalizes blurriness by comparing the edge-maps of the reconstruction and the truth.
+    Forces the model to learn fine brain contours (gyri/sulci).
+    """
+    # 3D Laplacian kernel: [1, 1, 3, 3, 3]
+    kernel = torch.tensor([[[0, 0, 0], [0, 1, 0], [0, 0, 0]],
+                           [[0, 1, 0], [1, -6, 1], [0, 1, 0]],
+                           [[0, 0, 0], [0, 1, 0], [0, 0, 0]]],
+                          dtype=torch.float32, device=recon_logits.device).view(1, 1, 3, 3, 3)
+
+    recon_probs = torch.sigmoid(recon_logits)
+    edge_recon = F.conv3d(recon_probs, kernel, padding=1)
+    edge_target = F.conv3d(target, kernel, padding=1)
+
+    return F.mse_loss(edge_recon, edge_target)
+
+
+# --- FINAL HIGH-FIDELITY LOSS FUNCTION ---
 def vae_loss_function(recon, target, mu, logvar, beta=0.0):
-    # 1. Reconstruction Loss (Dice)
-    # Add epsilon to sigmoid to prevent pure 0 or 1
+    """
+    Phase 2 Loss: Priority shifted to edge sharpness and anatomical detail.
+    """
+    # 1. Weighted BCE: 10x penalty for errors on brain pixels (foreground)
+    pos_weight = torch.tensor([10.0], device=recon.device)
+    bce_loss = F.binary_cross_entropy_with_logits(recon, target, pos_weight=pos_weight)
+
+    # 2. Laplacian Edge Loss: Specifically targets high-frequency contour details
+    edge_loss = get_laplacian_loss(recon, target)
+
+    # 3. Dice Loss: Global shape topology
     recon_probs = torch.sigmoid(recon)
-    recon_probs = torch.clamp(recon_probs, 1e-6, 1 - 1e-6)
-    recon_loss = robust_dice_loss(recon_probs, target).mean()
+    dice_loss = robust_dice_loss(recon_probs, target).mean()
 
-    # 2. Safety Clamp for Latent Space (The Stabilizer)
-    # Tighter clamp (-5 to 5) prevents massive exponentiations
-    logvar = torch.clamp(logvar, min=-5, max=5)
-    mu = torch.clamp(mu, min=-10, max=10)
-
-    # 3. KL Divergence
-    num_voxels = target.numel()
+    # 4. KL Divergence: Regularization (Normalized)
     kld_loss = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
-    kld_loss /= num_voxels
+    kld_loss /= (target.numel())
 
-    return recon_loss + (beta * kld_loss), recon_loss, kld_loss
+    # BALANCE: 50% BCE (Location), 40% Edge (Contours), 10% Dice (Overlap)
+    total_loss = (0.5 * bce_loss) + (0.4 * edge_loss) + (0.1 * dice_loss) + (beta * kld_loss)
+
+    return total_loss, dice_loss, edge_loss, kld_loss
 
 
-# --- FIXED LOGGER ---
+# --- LOGGER ---
 class HybridLogger(object):
     def __init__(self, filepath, resume=False):
         mode = "a" if resume else "w"
@@ -56,8 +95,8 @@ class HybridLogger(object):
     def write(self, message):
         self.log.write(message)
         self.log.flush()
-        # ALLOW WARNINGS THROUGH
-        clean_keywords = ["Epoch", "Total", "Loading", "Starting", "Saved", "WARNING", "NaN"]
+        # Clean terminal output
+        clean_keywords = ["Epoch", "Total", "Edge", "Saved", "Starting"]
         if any(k in message for k in clean_keywords) or message.strip() == "":
             self.terminal.write(message)
             self.terminal.flush()
@@ -81,7 +120,7 @@ def get_next_log_file(base_dir):
 
 
 def train_vae():
-    # 1. SETUP
+    # 1. INITIAL SETUP
     config_path = r"C:\Users\Lab\OneDrive\Desktop\SPQA\params\config.yaml"
     config = load_config(config_path)
     fix_seeds(config['seed'])
@@ -91,101 +130,85 @@ def train_vae():
     log_file = get_next_log_file(log_dir)
     sys.stdout = HybridLogger(log_file)
 
-    print(f"--- Starting VAE Training on {device} ---")
+    print(f"--- STARTING RESIDUAL HIGH-FIDELITY VAE TRAINING ---")
+    print("✅ Architecture: Residual with 8x8x8 Bottleneck")
+    print("✅ Sharpener: Laplacian Edge Loss Integrated")
 
     save_dir = r"C:\Users\Lab\OneDrive\Desktop\SPQA\logs\vae_checkpoints"
     os.makedirs(save_dir, exist_ok=True)
 
-    # 2. DATA LOADER
-    dataset = NiftiFewShotDataset(
-        data_root=config['Data']['raw_data_root'],
-        id_file=config['Data']['training_ids'],
+    # 2. DATA LOADING
+    dataset = NiftiDataset(
+        img_dir=config['Data']['raw_data_root'],
+        list_path=config['Data']['training_ids'],
         image_size=config['model']['image_size'],
         is_train=True
     )
-    batch_size = config['Train']['batch_size']
 
     loader = DataLoader(
         dataset,
-        batch_size=batch_size,
+        batch_size=config['Train']['batch_size'],
         shuffle=True,
         num_workers=4,
         persistent_workers=True,
         pin_memory=True
     )
 
-    # 3. MODEL
+    # 3. MODEL & OPTIMIZER
     vae = VAE3D(
-        in_channels=2,
+        in_channels=2,  # Image + Mask
         out_channels=1,
         image_size=config['model']['image_size'],
-        latent_dim=config['model']['latent_dim']
+        latent_dim=config['model']['latent_dim']  # 2048 recommended
     ).to(device)
 
-    # LOWER LEARNING RATE (Critical for stability)
-    optimizer = optim.Adam(vae.parameters(), lr=2e-5)
+    # Low Learning Rate for detail stability
+    optimizer = optim.Adam(vae.parameters(), lr=5e-5)
 
-    # 4. LOOP
+    # 4. TRAINING LOOP
     vae.train()
-
-    # Reset to epoch 0 for stability (or you can load weights if you trust them)
-    print("Training from scratch to ensure stability.")
+    print("Training initialized.")
 
     for epoch in range(config['Train']['epochs']):
-        epoch_total = 0
-        epoch_recon = 0
-        epoch_kld = 0
+        epoch_total, epoch_dice, epoch_edge, epoch_kld = 0, 0, 0, 0
         valid_batches = 0
 
-        # Slower Annealing: 0 -> 0.005 over 100 epochs
-        beta = 0.005 * (epoch / 100) if epoch < 100 else 0.005
+        # Beta schedule (Small to allow unconstrained reconstruction)
+        if epoch < 50:
+            beta = 1e-7
+        else:
+            beta = 0.0005 * ((epoch - 50) / 100)
+            if beta > 0.0005: beta = 0.0005
 
-        for images, clean_masks, _ in loader:
-            images, clean_masks = images.to(device, non_blocking=True), clean_masks.to(device, non_blocking=True)
+        for batch in loader:
+            images = batch['image'].to(device, non_blocking=True)
+            clean_masks = batch['mask'].to(device, non_blocking=True)
 
-            # --- CUTOUT CORRUPTION ---
-            corrupted_masks = clean_masks.clone()
-            B, C, D, H, W = corrupted_masks.shape
-
-            for b in range(B):
-                d_box = torch.randint(D // 10, D // 5, (1,)).item()
-                h_box = torch.randint(H // 10, H // 5, (1,)).item()
-                w_box = torch.randint(W // 10, W // 5, (1,)).item()
-
-                z = torch.randint(0, D - d_box, (1,)).item()
-                y = torch.randint(0, H - h_box, (1,)).item()
-                x = torch.randint(0, W - w_box, (1,)).item()
-
-                val = 0.0 if torch.rand(1).item() > 0.5 else 1.0
-                corrupted_masks[b, :, z:z + d_box, y:y + h_box, x:x + w_box] = val
-            # -------------------------
-
+            # Corrupt the mask for the denoising task
+            corrupted_masks = morphological_corruption(clean_masks, kernel_size=3, max_iters=5)
             vae_input = torch.cat([images, corrupted_masks], dim=1)
 
             optimizer.zero_grad()
-
-            # PURE FP32 (No Autocast)
             recon, mu, logvar = vae(vae_input)
-            loss, r_loss, k_loss = vae_loss_function(recon, clean_masks, mu, logvar, beta=beta)
 
-            if torch.isnan(loss) or torch.isinf(loss):
-                print(f"⚠️ NaN Detected at Epoch {epoch + 1}! Skipping batch.")
+            loss, d_loss, e_loss, k_loss = vae_loss_function(recon, clean_masks, mu, logvar, beta=beta)
+
+            if torch.isnan(loss):
                 continue
 
             loss.backward()
-            # Stricter Gradient Clipping
             torch.nn.utils.clip_grad_norm_(vae.parameters(), max_norm=0.5)
             optimizer.step()
 
             epoch_total += loss.item()
-            epoch_recon += r_loss.item()
+            epoch_dice += d_loss.item()
+            epoch_edge += e_loss.item()
             epoch_kld += k_loss.item()
             valid_batches += 1
 
         div = valid_batches if valid_batches > 0 else 1
-
         print(
-            f"Epoch {epoch + 1} | Beta: {beta:.4f} | Total: {epoch_total / div:.4f} | Recon: {epoch_recon / div:.4f} | KLD: {epoch_kld / div:.4f}")
+            f"Epoch {epoch + 1:03d} | Total: {epoch_total / div:.4f} | DiceLoss: {epoch_dice / div:.4f} | EdgeLoss: {epoch_edge / div:.6f} | KLD: {epoch_kld / div:.4f}")
 
         if (epoch + 1) % 10 == 0:
             torch.save(vae.state_dict(), os.path.join(save_dir, f"vae_epoch_{epoch + 1}.pth"))
