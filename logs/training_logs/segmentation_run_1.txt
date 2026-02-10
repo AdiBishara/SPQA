@@ -1,0 +1,156 @@
+--- Starting ULTRA 3D Segmentation Training on cuda ---
+✅ VRAM Optimization: TF32 Enabled
+✅ Batch Size: 4
+✅ Filters: [32, 64, 128, 256, 512]
+--- Full Volume Augmentation Loader (Train) ---
+Target Size: (256, 256, 256)
+Epoch 1 | Segmentation Dice Loss: 0.8211
+Epoch 2 | Segmentation Dice Loss: 0.7874
+Epoch 3 | Segmentation Dice Loss: 0.7738
+Epoch 4 | Segmentation Dice Loss: 0.7635
+Epoch 5 | Segmentation Dice Loss: 0.7556
+Epoch 6 | Segmentation Dice Loss: 0.7498
+Epoch 7 | Segmentation Dice Loss: 0.7444
+Epoch 8 | Segmentation Dice Loss: 0.7390
+Epoch 9 | Segmentation Dice Loss: 0.7325
+Epoch 10 | Segmentation Dice Loss: 0.7297
+   -> Checkpoint Saved
+Epoch 11 | Segmentation Dice Loss: 0.7234
+Epoch 12 | Segmentation Dice Loss: 0.7191
+Epoch 13 | Segmentation Dice Loss: 0.7162
+Epoch 14 | Segmentation Dice Loss: 0.7113
+Epoch 15 | Segmentation Dice Loss: 0.7078
+Epoch 16 | Segmentation Dice Loss: 0.7041
+Epoch 17 | Segmentation Dice Loss: 0.7017
+Epoch 18 | Segmentation Dice Loss: 0.7006
+Epoch 19 | Segmentation Dice Loss: 0.6962
+Epoch 20 | Segmentation Dice Loss: 0.6950
+   -> Checkpoint Saved
+Epoch 21 | Segmentation Dice Loss: 0.6911
+Epoch 22 | Segmentation Dice Loss: 0.6896
+Epoch 23 | Segmentation Dice Loss: 0.6863
+Epoch 24 | Segmentation Dice Loss: 0.6841
+Epoch 25 | Segmentation Dice Loss: 0.6820
+Epoch 26 | Segmentation Dice Loss: 0.6792
+Epoch 27 | Segmentation Dice Loss: 0.6795
+Epoch 28 | Segmentation Dice Loss: 0.6758
+Epoch 29 | Segmentation Dice Loss: 0.6746
+Epoch 30 | Segmentation Dice Loss: 0.6714
+   -> Checkpoint Saved
+Epoch 31 | Segmentation Dice Loss: 0.6717
+Epoch 32 | Segmentation Dice Loss: 0.6684
+Epoch 33 | Segmentation Dice Loss: 0.6671
+Epoch 34 | Segmentation Dice Loss: 0.6656
+Epoch 35 | Segmentation Dice Loss: 0.6671
+Epoch 36 | Segmentation Dice Loss: 0.6630
+Epoch 37 | Segmentation Dice Loss: 0.6612
+Epoch 38 | Segmentation Dice Loss: 0.6603
+Epoch 39 | Segmentation Dice Loss: 0.6577
+Epoch 40 | Segmentation Dice Loss: nan
+   -> Checkpoint Saved
+Epoch 41 | Segmentation Dice Loss: nan
+Epoch 42 | Segmentation Dice Loss: nan
+Epoch 43 | Segmentation Dice Loss: nan
+Epoch 44 | Segmentation Dice Loss: nan
+Epoch 45 | Segmentation Dice Loss: nan
+Epoch 46 | Segmentation Dice Loss: nan
+Epoch 47 | Segmentation Dice Loss: nan
+Epoch 48 | Segmentation Dice Loss: nan
+Epoch 49 | Segmentation Dice Loss: nan
+Epoch 50 | Segmentation Dice Loss: nan
+   -> Checkpoint Saved
+Epoch 51 | Segmentation Dice Loss: nan
+Epoch 52 | Segmentation Dice Loss: nan
+Epoch 53 | Segmentation Dice Loss: nan
+Epoch 54 | Segmentation Dice Loss: nan
+Epoch 55 | Segmentation Dice Loss: nan
+Epoch 56 | Segmentation Dice Loss: nan
+Epoch 57 | Segmentation Dice Loss: nan
+Epoch 58 | Segmentation Dice Loss: nan
+Epoch 59 | Segmentation Dice Loss: nan
+Epoch 60 | Segmentation Dice Loss: nan
+   -> Checkpoint Saved
+Epoch 61 | Segmentation Dice Loss: nan
+Epoch 62 | Segmentation Dice Loss: nan
+Epoch 63 | Segmentation Dice Loss: nan
+Epoch 64 | Segmentation Dice Loss: nan
+Epoch 65 | Segmentation Dice Loss: nan
+Epoch 66 | Segmentation Dice Loss: nan
+Epoch 67 | Segmentation Dice Loss: nan
+Epoch 68 | Segmentation Dice Loss: nan
+Epoch 69 | Segmentation Dice Loss: nan
+Epoch 70 | Segmentation Dice Loss: nan
+   -> Checkpoint Saved
+Epoch 71 | Segmentation Dice Loss: nan
+Epoch 72 | Segmentation Dice Loss: nan
+Epoch 73 | Segmentation Dice Loss: nan
+Epoch 74 | Segmentation Dice Loss: nan
+Epoch 75 | Segmentation Dice Loss: nan
+Epoch 76 | Segmentation Dice Loss: nan
+Epoch 77 | Segmentation Dice Loss: nan
+Epoch 78 | Segmentation Dice Loss: nan
+Epoch 79 | Segmentation Dice Loss: nan
+Epoch 80 | Segmentation Dice Loss: nan
+   -> Checkpoint Saved
+Epoch 81 | Segmentation Dice Loss: nan
+Epoch 82 | Segmentation Dice Loss: nan
+Epoch 83 | Segmentation Dice Loss: nan
+Epoch 84 | Segmentation Dice Loss: nan
+Epoch 85 | Segmentation Dice Loss: nan
+Epoch 86 | Segmentation Dice Loss: nan
+Epoch 87 | Segmentation Dice Loss: nan
+Epoch 88 | Segmentation Dice Loss: nan
+Epoch 89 | Segmentation Dice Loss: nan
+Epoch 90 | Segmentation Dice Loss: nan
+   -> Checkpoint Saved
+Epoch 91 | Segmentation Dice Loss: nan
+Epoch 92 | Segmentation Dice Loss: nan
+Epoch 93 | Segmentation Dice Loss: nan
+Epoch 94 | Segmentation Dice Loss: nan
+Epoch 95 | Segmentation Dice Loss: nan
+Epoch 96 | Segmentation Dice Loss: nan
+Epoch 97 | Segmentation Dice Loss: nan
+Epoch 98 | Segmentation Dice Loss: nan
+Epoch 99 | Segmentation Dice Loss: nan
+Epoch 100 | Segmentation Dice Loss: nan
+   -> Checkpoint Saved
+Epoch 101 | Segmentation Dice Loss: nan
+Epoch 102 | Segmentation Dice Loss: nan
+Epoch 103 | Segmentation Dice Loss: nan
+Epoch 104 | Segmentation Dice Loss: nan
+Epoch 105 | Segmentation Dice Loss: nan
+Epoch 106 | Segmentation Dice Loss: nan
+Epoch 107 | Segmentation Dice Loss: nan
+Epoch 108 | Segmentation Dice Loss: nan
+Epoch 109 | Segmentation Dice Loss: nan
+Epoch 110 | Segmentation Dice Loss: nan
+   -> Checkpoint Saved
+Epoch 111 | Segmentation Dice Loss: nan
+Epoch 112 | Segmentation Dice Loss: nan
+Epoch 113 | Segmentation Dice Loss: nan
+Epoch 114 | Segmentation Dice Loss: nan
+Epoch 115 | Segmentation Dice Loss: nan
+Epoch 116 | Segmentation Dice Loss: nan
+Epoch 117 | Segmentation Dice Loss: nan
+Epoch 118 | Segmentation Dice Loss: nan
+Epoch 119 | Segmentation Dice Loss: nan
+Epoch 120 | Segmentation Dice Loss: nan
+   -> Checkpoint Saved
+Epoch 121 | Segmentation Dice Loss: nan
+Epoch 122 | Segmentation Dice Loss: nan
+Epoch 123 | Segmentation Dice Loss: nan
+Epoch 124 | Segmentation Dice Loss: nan
+Epoch 125 | Segmentation Dice Loss: nan
+Epoch 126 | Segmentation Dice Loss: nan
+Epoch 127 | Segmentation Dice Loss: nan
+Epoch 128 | Segmentation Dice Loss: nan
+Epoch 129 | Segmentation Dice Loss: nan
+Epoch 130 | Segmentation Dice Loss: nan
+   -> Checkpoint Saved
+Epoch 131 | Segmentation Dice Loss: nan
+Epoch 132 | Segmentation Dice Loss: nan
+Epoch 133 | Segmentation Dice Loss: nan
+Epoch 134 | Segmentation Dice Loss: nan
+Epoch 135 | Segmentation Dice Loss: nan
+Epoch 136 | Segmentation Dice Loss: nan
+Epoch 137 | Segmentation Dice Loss: nan

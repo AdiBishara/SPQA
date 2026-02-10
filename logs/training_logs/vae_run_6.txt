@@ -1,0 +1,190 @@
+RESUMING FROM: vae_epoch_160.pth
+RUN NAME: SPQA_FullVol_Ultra | LOG: vae_run_6
+
+RESUME START: Epoch 160
+STABILITY THRESHOLD: 8
+--- Fast 3D Loader Initialized (Train) ---
+Epoch 161 | Phase 1 (Volume) (Stable: 1) | Dice: 0.8242 | Loss: 0.5000
+Epoch 162 | Phase 1 (Volume) (Stable: 0) | Dice: 0.7913 | Loss: 3.2681
+Epoch 163 | Phase 1 (Volume) (Stable: 1) | Dice: 0.8656 | Loss: 2.4147
+Epoch 164 | Phase 1 (Volume) (Stable: 2) | Dice: 0.8615 | Loss: 2.1890
+Epoch 165 | Phase 1 (Volume) (Stable: 3) | Dice: 0.8583 | Loss: 2.5221
+Epoch 166 | Phase 1 (Volume) (Stable: 4) | Dice: 0.8724 | Loss: 2.0720
+Epoch 167 | Phase 1 (Volume) (Stable: 0) | Dice: 0.8566 | Loss: 2.5486
+Epoch 168 | Phase 1 (Volume) (Stable: 1) | Dice: 0.8819 | Loss: 1.3508
+Epoch 169 | Phase 1 (Volume) (Stable: 2) | Dice: 0.8759 | Loss: 1.9696
+Visual Saved: epoch_170_check.png
+Epoch 170 | Phase 1 (Volume) (Stable: 3) | Dice: 0.8722 | Loss: 1.9607
+Epoch 171 | Phase 1 (Volume) (Stable: 4) | Dice: 0.8869 | Loss: 2.2166
+Epoch 172 | Phase 1 (Volume) (Stable: 0) | Dice: 0.8729 | Loss: 2.3664
+Epoch 173 | Phase 1 (Volume) (Stable: 1) | Dice: 0.8884 | Loss: 2.1954
+Epoch 174 | Phase 1 (Volume) (Stable: 2) | Dice: 0.8865 | Loss: 1.8928
+Epoch 175 | Phase 1 (Volume) (Stable: 0) | Dice: 0.8682 | Loss: 2.4191
+Epoch 176 | Phase 1 (Volume) (Stable: 1) | Dice: 0.8826 | Loss: 1.4571
+Epoch 177 | Phase 1 (Volume) (Stable: 2) | Dice: 0.9105 | Loss: 1.5070
+Epoch 178 | Phase 1 (Volume) (Stable: 3) | Dice: 0.9010 | Loss: 1.6559
+Epoch 179 | Phase 1 (Volume) (Stable: 4) | Dice: 0.9007 | Loss: 1.7976
+Visual Saved: epoch_180_check.png
+Epoch 180 | Phase 1 (Volume) (Stable: 0) | Dice: 0.8784 | Loss: 1.8299
+Epoch 181 | Phase 1 (Volume) (Stable: 0) | Dice: 0.8516 | Loss: 2.6267
+Epoch 182 | Phase 1 (Volume) (Stable: 1) | Dice: 0.8852 | Loss: 1.8101
+Epoch 183 | Phase 1 (Volume) (Stable: 2) | Dice: 0.8992 | Loss: 1.7210
+Epoch 184 | Phase 1 (Volume) (Stable: 3) | Dice: 0.9004 | Loss: 2.0769
+Epoch 185 | Phase 1 (Volume) (Stable: 4) | Dice: 0.9151 | Loss: 1.4618
+Epoch 186 | Phase 1 (Volume) (Stable: 5) | Dice: 0.9112 | Loss: 1.5377
+Epoch 187 | Phase 1 (Volume) (Stable: 6) | Dice: 0.9238 | Loss: 1.3480
+Epoch 188 | Phase 1 (Volume) (Stable: 0) | Dice: 0.8987 | Loss: 1.3040
+Epoch 189 | Phase 1 (Volume) (Stable: 1) | Dice: 0.9114 | Loss: 1.9631
+Visual Saved: epoch_190_check.png
+Epoch 190 | Phase 1 (Volume) (Stable: 2) | Dice: 0.9068 | Loss: 1.3486
+Epoch 191 | Phase 1 (Volume) (Stable: 0) | Dice: 0.8847 | Loss: 1.8461
+Epoch 192 | Phase 1 (Volume) (Stable: 1) | Dice: 0.8938 | Loss: 2.1597
+Epoch 193 | Phase 1 (Volume) (Stable: 2) | Dice: 0.9274 | Loss: 1.7880
+Epoch 194 | Phase 1 (Volume) (Stable: 0) | Dice: 0.9031 | Loss: 1.5857
+Epoch 195 | Phase 1 (Volume) (Stable: 0) | Dice: 0.8878 | Loss: 2.2290
+Epoch 196 | Phase 1 (Volume) (Stable: 1) | Dice: 0.8999 | Loss: 1.7334
+Epoch 197 | Phase 1 (Volume) (Stable: 2) | Dice: 0.8903 | Loss: 1.7531
+Epoch 198 | Phase 1 (Volume) (Stable: 3) | Dice: 0.9065 | Loss: 1.1547
+Epoch 199 | Phase 1 (Volume) (Stable: 4) | Dice: 0.9073 | Loss: 1.5302
+Visual Saved: epoch_200_check.png
+Epoch 200 | Phase 1 (Volume) (Stable: 0) | Dice: 0.8571 | Loss: 2.2578
+Epoch 201 | Phase 1 (Volume) (Stable: 1) | Dice: 0.9027 | Loss: 1.5956
+Epoch 202 | Phase 1 (Volume) (Stable: 0) | Dice: 0.8697 | Loss: 2.0012
+Epoch 203 | Phase 1 (Volume) (Stable: 1) | Dice: 0.8629 | Loss: 2.4980
+Epoch 204 | Phase 1 (Volume) (Stable: 2) | Dice: 0.9089 | Loss: 1.9831
+Epoch 205 | Phase 1 (Volume) (Stable: 3) | Dice: 0.9003 | Loss: 1.6098
+Epoch 206 | Phase 1 (Volume) (Stable: 4) | Dice: 0.9197 | Loss: 1.0218
+Epoch 207 | Phase 1 (Volume) (Stable: 0) | Dice: 0.9047 | Loss: 2.0308
+Epoch 208 | Phase 1 (Volume) (Stable: 0) | Dice: 0.8786 | Loss: 1.8847
+Epoch 209 | Phase 1 (Volume) (Stable: 1) | Dice: 0.9010 | Loss: 1.6324
+Visual Saved: epoch_210_check.png
+Epoch 210 | Phase 1 (Volume) (Stable: 2) | Dice: 0.9096 | Loss: 1.0978
+Epoch 211 | Phase 1 (Volume) (Stable: 3) | Dice: 0.9082 | Loss: 1.1667
+Epoch 212 | Phase 1 (Volume) (Stable: 4) | Dice: 0.9172 | Loss: 1.8996
+Epoch 213 | Phase 1 (Volume) (Stable: 0) | Dice: 0.8788 | Loss: 1.5695
+Epoch 214 | Phase 1 (Volume) (Stable: 1) | Dice: 0.9028 | Loss: 1.3062
+Epoch 215 | Phase 1 (Volume) (Stable: 0) | Dice: 0.8820 | Loss: 1.9695
+Epoch 216 | Phase 1 (Volume) (Stable: 1) | Dice: 0.9062 | Loss: 1.1809
+Epoch 217 | Phase 1 (Volume) (Stable: 2) | Dice: 0.9102 | Loss: 1.0603
+Epoch 218 | Phase 1 (Volume) (Stable: 0) | Dice: 0.8930 | Loss: 1.6846
+Epoch 219 | Phase 1 (Volume) (Stable: 1) | Dice: 0.9282 | Loss: 0.9140
+Visual Saved: epoch_220_check.png
+Epoch 220 | Phase 1 (Volume) (Stable: 0) | Dice: 0.8929 | Loss: 1.7263
+Epoch 221 | Phase 1 (Volume) (Stable: 0) | Dice: 0.8705 | Loss: 2.1198
+Epoch 222 | Phase 1 (Volume) (Stable: 1) | Dice: 0.8905 | Loss: 1.7527
+Epoch 223 | Phase 1 (Volume) (Stable: 2) | Dice: 0.9037 | Loss: 2.0581
+Epoch 224 | Phase 1 (Volume) (Stable: 3) | Dice: 0.9081 | Loss: 1.5534
+Epoch 225 | Phase 1 (Volume) (Stable: 4) | Dice: 0.9113 | Loss: 1.1056
+Epoch 226 | Phase 1 (Volume) (Stable: 5) | Dice: 0.9099 | Loss: 1.9878
+Epoch 227 | Phase 1 (Volume) (Stable: 6) | Dice: 0.9171 | Loss: 1.9094
+Epoch 228 | Phase 1 (Volume) (Stable: 7) | Dice: 0.9255 | Loss: 1.4447
+Epoch 229 | Phase 4 (Anatomy Lock) (Stable: 8) | Dice: 0.9297 | Loss: 1.2923
+Visual Saved: epoch_230_check.png
+Epoch 230 | Phase 1 (Volume) (Stable: 0) | Dice: 0.9155 | Loss: 4.7557
+Epoch 231 | Phase 1 (Volume) (Stable: 1) | Dice: 0.9359 | Loss: 1.2891
+Epoch 232 | Phase 1 (Volume) (Stable: 0) | Dice: 0.9038 | Loss: 1.2410
+Epoch 233 | Phase 1 (Volume) (Stable: 1) | Dice: 0.8962 | Loss: 1.6986
+Epoch 234 | Phase 1 (Volume) (Stable: 0) | Dice: 0.8682 | Loss: 2.0388
+Epoch 235 | Phase 1 (Volume) (Stable: 1) | Dice: 0.9155 | Loss: 1.4420
+Epoch 236 | Phase 1 (Volume) (Stable: 2) | Dice: 0.9078 | Loss: 2.0135
+Epoch 237 | Phase 1 (Volume) (Stable: 3) | Dice: 0.9141 | Loss: 1.9431
+Epoch 238 | Phase 1 (Volume) (Stable: 0) | Dice: 0.8935 | Loss: 2.1711
+Epoch 239 | Phase 1 (Volume) (Stable: 1) | Dice: 0.8857 | Loss: 2.2571
+Visual Saved: epoch_240_check.png
+Epoch 240 | Phase 1 (Volume) (Stable: 2) | Dice: 0.8915 | Loss: 1.7645
+Epoch 241 | Phase 1 (Volume) (Stable: 3) | Dice: 0.8932 | Loss: 2.1799
+Epoch 242 | Phase 1 (Volume) (Stable: 0) | Dice: 0.8687 | Loss: 2.1649
+Epoch 243 | Phase 1 (Volume) (Stable: 0) | Dice: 0.8584 | Loss: 2.3088
+Epoch 244 | Phase 1 (Volume) (Stable: 1) | Dice: 0.8828 | Loss: 1.5896
+Epoch 245 | Phase 1 (Volume) (Stable: 2) | Dice: 0.8734 | Loss: 1.7668
+Epoch 246 | Phase 1 (Volume) (Stable: 3) | Dice: 0.9308 | Loss: 1.3045
+Epoch 247 | Phase 1 (Volume) (Stable: 0) | Dice: 0.9010 | Loss: 2.0858
+Epoch 248 | Phase 1 (Volume) (Stable: 0) | Dice: 0.8745 | Loss: 1.9469
+Epoch 249 | Phase 1 (Volume) (Stable: 1) | Dice: 0.9024 | Loss: 1.6114
+Visual Saved: epoch_250_check.png
+Epoch 250 | Phase 1 (Volume) (Stable: 0) | Dice: 0.8924 | Loss: 1.7078
+Epoch 251 | Phase 1 (Volume) (Stable: 1) | Dice: 0.8906 | Loss: 1.9188
+Epoch 252 | Phase 1 (Volume) (Stable: 2) | Dice: 0.9082 | Loss: 1.2553
+Epoch 253 | Phase 1 (Volume) (Stable: 0) | Dice: 0.8955 | Loss: 2.1451
+Epoch 254 | Phase 1 (Volume) (Stable: 1) | Dice: 0.8998 | Loss: 1.3372
+Epoch 255 | Phase 1 (Volume) (Stable: 2) | Dice: 0.9159 | Loss: 1.4312
+Epoch 256 | Phase 1 (Volume) (Stable: 3) | Dice: 0.9105 | Loss: 1.1429
+Epoch 257 | Phase 1 (Volume) (Stable: 4) | Dice: 0.9043 | Loss: 1.6290
+Epoch 258 | Phase 1 (Volume) (Stable: 5) | Dice: 0.9052 | Loss: 1.6418
+Epoch 259 | Phase 1 (Volume) (Stable: 6) | Dice: 0.8965 | Loss: 2.1237
+Visual Saved: epoch_260_check.png
+Epoch 260 | Phase 1 (Volume) (Stable: 7) | Dice: 0.9053 | Loss: 2.0280
+Epoch 261 | Phase 3 (Precision) (Stable: 8) | Dice: 0.8973 | Loss: 1.3640
+Epoch 262 | Phase 3 (Precision) (Stable: 9) | Dice: 0.8902 | Loss: 8.1696
+Epoch 263 | Phase 3 (Precision) (Stable: 10) | Dice: 0.8944 | Loss: 5.4764
+Epoch 264 | Phase 3 (Precision) (Stable: 11) | Dice: 0.8853 | Loss: 3.0841
+Epoch 265 | Phase 1 (Volume) (Stable: 0) | Dice: 0.8665 | Loss: 3.4952
+Epoch 266 | Phase 1 (Volume) (Stable: 0) | Dice: 0.8564 | Loss: 2.0997
+Epoch 267 | Phase 1 (Volume) (Stable: 1) | Dice: 0.8986 | Loss: 1.6804
+Epoch 268 | Phase 1 (Volume) (Stable: 2) | Dice: 0.8959 | Loss: 1.7739
+Epoch 269 | Phase 1 (Volume) (Stable: 3) | Dice: 0.8906 | Loss: 2.1938
+Visual Saved: epoch_270_check.png
+Epoch 270 | Phase 1 (Volume) (Stable: 4) | Dice: 0.9117 | Loss: 1.1818
+Epoch 271 | Phase 1 (Volume) (Stable: 5) | Dice: 0.9109 | Loss: 1.1473
+Epoch 272 | Phase 1 (Volume) (Stable: 6) | Dice: 0.9033 | Loss: 1.6895
+Epoch 273 | Phase 1 (Volume) (Stable: 0) | Dice: 0.8867 | Loss: 1.3488
+Epoch 274 | Phase 1 (Volume) (Stable: 1) | Dice: 0.8985 | Loss: 1.8164
+Epoch 275 | Phase 1 (Volume) (Stable: 2) | Dice: 0.9079 | Loss: 1.2433
+Epoch 276 | Phase 1 (Volume) (Stable: 3) | Dice: 0.9077 | Loss: 2.0013
+Epoch 277 | Phase 1 (Volume) (Stable: 4) | Dice: 0.9136 | Loss: 1.9341
+Epoch 278 | Phase 1 (Volume) (Stable: 5) | Dice: 0.9330 | Loss: 0.8524
+Epoch 279 | Phase 1 (Volume) (Stable: 0) | Dice: 0.9207 | Loss: 1.4103
+Visual Saved: epoch_280_check.png
+Epoch 280 | Phase 1 (Volume) (Stable: 1) | Dice: 0.9151 | Loss: 1.4527
+Epoch 281 | Phase 1 (Volume) (Stable: 0) | Dice: 0.9040 | Loss: 2.0485
+Epoch 282 | Phase 1 (Volume) (Stable: 1) | Dice: 0.9255 | Loss: 0.9789
+Epoch 283 | Phase 1 (Volume) (Stable: 0) | Dice: 0.8733 | Loss: 1.9868
+Epoch 284 | Phase 1 (Volume) (Stable: 1) | Dice: 0.9177 | Loss: 1.8961
+Epoch 285 | Phase 1 (Volume) (Stable: 2) | Dice: 0.9128 | Loss: 1.4859
+Epoch 286 | Phase 1 (Volume) (Stable: 3) | Dice: 0.9226 | Loss: 1.4173
+Epoch 287 | Phase 1 (Volume) (Stable: 4) | Dice: 0.9149 | Loss: 1.1344
+Epoch 288 | Phase 1 (Volume) (Stable: 0) | Dice: 0.9024 | Loss: 1.6085
+Epoch 289 | Phase 1 (Volume) (Stable: 1) | Dice: 0.9210 | Loss: 1.8559
+Visual Saved: epoch_290_check.png
+Epoch 290 | Phase 1 (Volume) (Stable: 0) | Dice: 0.8871 | Loss: 2.2396
+Epoch 291 | Phase 1 (Volume) (Stable: 1) | Dice: 0.8883 | Loss: 2.2218
+Epoch 292 | Phase 1 (Volume) (Stable: 2) | Dice: 0.9221 | Loss: 1.4990
+Epoch 293 | Phase 1 (Volume) (Stable: 0) | Dice: 0.8806 | Loss: 2.3079
+Epoch 294 | Phase 1 (Volume) (Stable: 1) | Dice: 0.8969 | Loss: 1.3750
+Epoch 295 | Phase 1 (Volume) (Stable: 0) | Dice: 0.8780 | Loss: 2.0187
+Epoch 296 | Phase 1 (Volume) (Stable: 1) | Dice: 0.8814 | Loss: 2.3083
+Epoch 297 | Phase 1 (Volume) (Stable: 2) | Dice: 0.8935 | Loss: 1.3737
+Epoch 298 | Phase 1 (Volume) (Stable: 3) | Dice: 0.8952 | Loss: 1.2831
+Epoch 299 | Phase 1 (Volume) (Stable: 4) | Dice: 0.9155 | Loss: 1.6004
+Visual Saved: epoch_300_check.png
+Epoch 300 | Phase 1 (Volume) (Stable: 5) | Dice: 0.9071 | Loss: 1.6686
+Epoch 301 | Phase 1 (Volume) (Stable: 6) | Dice: 0.9038 | Loss: 2.0460
+Epoch 302 | Phase 1 (Volume) (Stable: 7) | Dice: 0.9105 | Loss: 1.6280
+Epoch 303 | Phase 4 (Anatomy Lock) (Stable: 8) | Dice: 0.9293 | Loss: 1.2786
+Epoch 304 | Phase 1 (Volume) (Stable: 0) | Dice: 0.9146 | Loss: 2.7110
+Epoch 305 | Phase 1 (Volume) (Stable: 1) | Dice: 0.9172 | Loss: 1.4086
+Epoch 306 | Phase 1 (Volume) (Stable: 2) | Dice: 0.9234 | Loss: 0.9201
+Epoch 307 | Phase 1 (Volume) (Stable: 3) | Dice: 0.9249 | Loss: 1.8175
+Epoch 308 | Phase 1 (Volume) (Stable: 0) | Dice: 0.9012 | Loss: 1.6987
+Epoch 309 | Phase 1 (Volume) (Stable: 1) | Dice: 0.9038 | Loss: 1.7720
+Visual Saved: epoch_310_check.png
+Epoch 310 | Phase 1 (Volume) (Stable: 2) | Dice: 0.9252 | Loss: 0.9916
+Epoch 311 | Phase 1 (Volume) (Stable: 0) | Dice: 0.9124 | Loss: 1.4964
+Epoch 312 | Phase 1 (Volume) (Stable: 0) | Dice: 0.8837 | Loss: 1.9132
+Epoch 313 | Phase 1 (Volume) (Stable: 1) | Dice: 0.9063 | Loss: 1.6884
+Epoch 314 | Phase 1 (Volume) (Stable: 2) | Dice: 0.9256 | Loss: 1.4588
+Epoch 315 | Phase 1 (Volume) (Stable: 0) | Dice: 0.9053 | Loss: 1.7166
+Epoch 316 | Phase 1 (Volume) (Stable: 1) | Dice: 0.9279 | Loss: 1.4339
+Epoch 317 | Phase 1 (Volume) (Stable: 0) | Dice: 0.8973 | Loss: 1.4685
+Epoch 318 | Phase 1 (Volume) (Stable: 1) | Dice: 0.9155 | Loss: 1.2192
+Epoch 319 | Phase 1 (Volume) (Stable: 0) | Dice: 0.8876 | Loss: 2.2326
+Visual Saved: epoch_320_check.png
+Epoch 320 | Phase 1 (Volume) (Stable: 1) | Dice: 0.9118 | Loss: 1.9596
+Epoch 321 | Phase 1 (Volume) (Stable: 0) | Dice: 0.8928 | Loss: 1.7151
+Epoch 322 | Phase 1 (Volume) (Stable: 1) | Dice: 0.8990 | Loss: 1.6497
+Epoch 323 | Phase 1 (Volume) (Stable: 2) | Dice: 0.9147 | Loss: 1.9243
+Epoch 324 | Phase 1 (Volume) (Stable: 0) | Dice: 0.8558 | Loss: 2.5894
+Epoch 325 | Phase 1 (Volume) (Stable: 1) | Dice: 0.8920 | Loss: 1.7726
+Epoch 326 | Phase 1 (Volume) (Stable: 2) | Dice: 0.8941 | Loss: 1.8217
+Epoch 327 | Phase 1 (Volume) (Stable: 0) | Dice: 0.8827 | Loss: 1.5095
+Epoch 328 | Phase 1 (Volume) (Stable: 1) | Dice: 0.8832 | Loss: 2.2866

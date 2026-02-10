@@ -1,0 +1,50 @@
+RUN NAME: SPQA_FullVol_Ultra
+LOG FILE: vae_run_1
+
+--- Fast 3D Loader Initialized (Train) ---
+Epoch 001 | Phase 1 (Volume) (Stable: 1) | Dice: 0.1398
+Epoch 002 | Phase 1 (Volume) (Stable: 2) | Dice: 0.1955
+Epoch 003 | Phase 1 (Volume) (Stable: 3) | Dice: 0.2977
+Epoch 004 | Phase 1 (Volume) (Stable: 4) | Dice: 0.3753
+Epoch 005 | Phase 1 (Volume) (Stable: 5) | Dice: 0.4023
+Epoch 006 | Phase 1 (Volume) (Stable: 6) | Dice: 0.4631
+Epoch 007 | Phase 1 (Volume) (Stable: 7) | Dice: 0.4743
+Epoch 008 | Phase 1 (Volume) (Stable: 8) | Dice: 0.4969
+Epoch 009 | Phase 1 (Volume) (Stable: 9) | Dice: 0.5088
+Epoch 010 | Phase 1 (Volume) (Stable: 10) | Dice: 0.5180
+Epoch 011 | Phase 1 (Volume) (Stable: 11) | Dice: 0.5254
+Epoch 012 | Phase 1 (Volume) (Stable: 12) | Dice: 0.5341
+Epoch 013 | Phase 1 (Volume) (Stable: 13) | Dice: 0.5420
+Epoch 014 | Phase 1 (Volume) (Stable: 14) | Dice: 0.5495
+Epoch 015 | Phase 1 (Volume) (Stable: 15) | Dice: 0.5545
+Epoch 016 | Phase 1 (Volume) (Stable: 16) | Dice: 0.5688
+Epoch 017 | Phase 1 (Volume) (Stable: 17) | Dice: 0.5721
+Epoch 018 | Phase 1 (Volume) (Stable: 18) | Dice: 0.5815
+Epoch 019 | Phase 1 (Volume) (Stable: 19) | Dice: 0.5802
+Epoch 020 | Phase 1 (Volume) (Stable: 20) | Dice: 0.5907
+Epoch 021 | Phase 2 (Sharpening) (Stable: 21) | Dice: 0.6008
+Epoch 022 | Phase 2 (Sharpening) (Stable: 22) | Dice: 0.6014
+Epoch 023 | Phase 2 (Sharpening) (Stable: 23) | Dice: 0.6045
+Epoch 024 | Phase 1 (Volume) (Stable: 0) | Dice: 0.5755
+Epoch 025 | Phase 1 (Volume) (Stable: 1) | Dice: 0.5695
+Epoch 026 | Phase 1 (Volume) (Stable: 2) | Dice: 0.5597
+Epoch 027 | Phase 1 (Volume) (Stable: 3) | Dice: 0.5710
+Epoch 028 | Phase 1 (Volume) (Stable: 4) | Dice: 0.5934
+Epoch 029 | Phase 2 (Sharpening) (Stable: 5) | Dice: 0.6006
+Epoch 030 | Phase 2 (Sharpening) (Stable: 6) | Dice: 0.6035
+Epoch 031 | Phase 1 (Volume) (Stable: 0) | Dice: 0.5829
+Epoch 032 | Phase 1 (Volume) (Stable: 1) | Dice: 0.6148
+Epoch 033 | Phase 1 (Volume) (Stable: 2) | Dice: 0.6223
+Epoch 034 | Phase 1 (Volume) (Stable: 3) | Dice: 0.6366
+Epoch 035 | Phase 1 (Volume) (Stable: 0) | Dice: 0.6259
+Epoch 036 | Phase 1 (Volume) (Stable: 1) | Dice: 0.6585
+Epoch 037 | Phase 1 (Volume) (Stable: 2) | Dice: 0.6584
+Epoch 038 | Phase 1 (Volume) (Stable: 3) | Dice: 0.6659
+Epoch 039 | Phase 1 (Volume) (Stable: 4) | Dice: 0.6790
+Epoch 040 | Phase 2 (Sharpening) (Stable: 5) | Dice: 0.6921
+Epoch 041 | Phase 2 (Sharpening) (Stable: 6) | Dice: 0.6968
+Epoch 042 | Phase 2 (Sharpening) (Stable: 7) | Dice: 0.7081
+Epoch 043 | Phase 1 (Volume) (Stable: 0) | Dice: 0.6833
+Epoch 044 | Phase 1 (Volume) (Stable: 1) | Dice: 0.7121
+Epoch 045 | Phase 1 (Volume) (Stable: 0) | Dice: 0.6850
+Epoch 046 | Phase 1 (Volume) (Stable: 1) | Dice: 0.7254

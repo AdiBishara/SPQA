@@ -1,0 +1,6 @@
+--- Starting ULTRA 3D Segmentation Training on cuda ---
+✅ VRAM Optimization: TF32 Enabled
+✅ Batch Size: 4
+✅ Filters: [32, 64, 128, 256, 512]
+--- Full Volume Augmentation Loader (Train) ---
+Target Size: (256, 256, 256)

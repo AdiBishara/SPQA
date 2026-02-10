@@ -1,0 +1,303 @@
+
+--- Starting High-Throughput Training on cuda ---
+✅ GPU Acceleration: Augmentation & TF32 Enabled
+--- Fast 3D Loader Initialized (Train) ---
+Data Loaded.
+Model Loaded. Resuming from Epoch 730.
+Epoch 731 | Segmentation Dice Loss: 0.2188
+Epoch 732 | Segmentation Dice Loss: 0.2955
+Epoch 733 | Segmentation Dice Loss: 0.2371
+Epoch 734 | Segmentation Dice Loss: 0.2425
+Epoch 735 | Segmentation Dice Loss: 0.2319
+Epoch 736 | Segmentation Dice Loss: 0.2165
+Epoch 737 | Segmentation Dice Loss: 0.2096
+Epoch 738 | Segmentation Dice Loss: 0.2055
+Epoch 739 | Segmentation Dice Loss: 0.2034
+Epoch 740 | Segmentation Dice Loss: 0.2273
+   -> Checkpoint Saved (Epoch 740)
+Epoch 741 | Segmentation Dice Loss: 0.2107
+Epoch 742 | Segmentation Dice Loss: 0.2120
+Epoch 743 | Segmentation Dice Loss: 0.2089
+Epoch 744 | Segmentation Dice Loss: 0.1992
+Epoch 745 | Segmentation Dice Loss: 0.2060
+Epoch 746 | Segmentation Dice Loss: 0.1959
+Epoch 747 | Segmentation Dice Loss: 0.1922
+Epoch 748 | Segmentation Dice Loss: 0.1920
+Epoch 749 | Segmentation Dice Loss: 0.1949
+Epoch 750 | Segmentation Dice Loss: 0.1897
+   -> Checkpoint Saved (Epoch 750)
+Epoch 751 | Segmentation Dice Loss: 0.1898
+Epoch 752 | Segmentation Dice Loss: 0.1910
+Epoch 753 | Segmentation Dice Loss: 0.1879
+Epoch 754 | Segmentation Dice Loss: 0.1870
+Epoch 755 | Segmentation Dice Loss: 0.1855
+Epoch 756 | Segmentation Dice Loss: 0.1882
+Epoch 757 | Segmentation Dice Loss: 0.1864
+Epoch 758 | Segmentation Dice Loss: 0.1863
+Epoch 759 | Segmentation Dice Loss: 0.1883
+Epoch 760 | Segmentation Dice Loss: 0.1814
+   -> Checkpoint Saved (Epoch 760)
+Epoch 761 | Segmentation Dice Loss: 0.1904
+Epoch 762 | Segmentation Dice Loss: 0.1798
+Epoch 763 | Segmentation Dice Loss: 0.1776
+Epoch 764 | Segmentation Dice Loss: 0.1811
+Epoch 765 | Segmentation Dice Loss: 0.1814
+Epoch 766 | Segmentation Dice Loss: 0.1772
+Epoch 767 | Segmentation Dice Loss: 0.1786
+Epoch 768 | Segmentation Dice Loss: 0.1768
+Epoch 769 | Segmentation Dice Loss: 0.1773
+Epoch 770 | Segmentation Dice Loss: 0.1754
+   -> Checkpoint Saved (Epoch 770)
+Epoch 771 | Segmentation Dice Loss: 0.1764
+Epoch 772 | Segmentation Dice Loss: 0.1711
+Epoch 773 | Segmentation Dice Loss: 0.1747
+Epoch 774 | Segmentation Dice Loss: 0.1703
+Epoch 775 | Segmentation Dice Loss: 0.1711
+Epoch 776 | Segmentation Dice Loss: 0.1676
+Epoch 777 | Segmentation Dice Loss: 0.1664
+Epoch 778 | Segmentation Dice Loss: 0.1661
+Epoch 779 | Segmentation Dice Loss: 0.1668
+Epoch 780 | Segmentation Dice Loss: 0.1656
+   -> Checkpoint Saved (Epoch 780)
+Epoch 781 | Segmentation Dice Loss: 0.1710
+Epoch 782 | Segmentation Dice Loss: 0.1657
+Epoch 783 | Segmentation Dice Loss: 0.1632
+Epoch 784 | Segmentation Dice Loss: 0.1714
+Epoch 785 | Segmentation Dice Loss: 0.1657
+Epoch 786 | Segmentation Dice Loss: 0.1607
+Epoch 787 | Segmentation Dice Loss: 0.1599
+Epoch 788 | Segmentation Dice Loss: 0.1606
+Epoch 789 | Segmentation Dice Loss: 0.1580
+Epoch 790 | Segmentation Dice Loss: 0.1577
+   -> Checkpoint Saved (Epoch 790)
+Epoch 791 | Segmentation Dice Loss: 0.1606
+Epoch 792 | Segmentation Dice Loss: 0.1564
+Epoch 793 | Segmentation Dice Loss: 0.1579
+Epoch 794 | Segmentation Dice Loss: 0.1563
+Epoch 795 | Segmentation Dice Loss: 0.1553
+Epoch 796 | Segmentation Dice Loss: 0.1544
+Epoch 797 | Segmentation Dice Loss: 0.1545
+Epoch 798 | Segmentation Dice Loss: 0.1558
+Epoch 799 | Segmentation Dice Loss: 0.1556
+Epoch 800 | Segmentation Dice Loss: 0.1510
+   -> Checkpoint Saved (Epoch 800)
+Epoch 801 | Segmentation Dice Loss: 0.1497
+Epoch 802 | Segmentation Dice Loss: 0.1509
+Epoch 803 | Segmentation Dice Loss: 0.1492
+Epoch 804 | Segmentation Dice Loss: 0.1500
+Epoch 805 | Segmentation Dice Loss: 0.1491
+Epoch 806 | Segmentation Dice Loss: 0.1557
+Epoch 807 | Segmentation Dice Loss: 0.1481
+Epoch 808 | Segmentation Dice Loss: 0.1480
+Epoch 809 | Segmentation Dice Loss: 0.1488
+Epoch 810 | Segmentation Dice Loss: 0.1488
+   -> Checkpoint Saved (Epoch 810)
+Epoch 811 | Segmentation Dice Loss: 0.1479
+Epoch 812 | Segmentation Dice Loss: 0.1436
+Epoch 813 | Segmentation Dice Loss: 0.1431
+Epoch 814 | Segmentation Dice Loss: 0.1425
+Epoch 815 | Segmentation Dice Loss: 0.1420
+Epoch 816 | Segmentation Dice Loss: 0.1448
+Epoch 817 | Segmentation Dice Loss: 0.1417
+Epoch 818 | Segmentation Dice Loss: 0.1413
+Epoch 819 | Segmentation Dice Loss: 0.1405
+Epoch 820 | Segmentation Dice Loss: 0.1391
+   -> Checkpoint Saved (Epoch 820)
+Epoch 821 | Segmentation Dice Loss: 0.1395
+Epoch 822 | Segmentation Dice Loss: 0.1440
+Epoch 823 | Segmentation Dice Loss: 0.1403
+Epoch 824 | Segmentation Dice Loss: 0.1383
+Epoch 825 | Segmentation Dice Loss: 0.1378
+Epoch 826 | Segmentation Dice Loss: 0.1414
+Epoch 827 | Segmentation Dice Loss: 0.1357
+Epoch 828 | Segmentation Dice Loss: 0.1372
+Epoch 829 | Segmentation Dice Loss: 0.1350
+Epoch 830 | Segmentation Dice Loss: 0.1384
+   -> Checkpoint Saved (Epoch 830)
+Epoch 831 | Segmentation Dice Loss: 0.1374
+Epoch 832 | Segmentation Dice Loss: 0.1334
+Epoch 833 | Segmentation Dice Loss: 0.1354
+Epoch 834 | Segmentation Dice Loss: 0.1337
+Epoch 835 | Segmentation Dice Loss: 0.1306
+Epoch 836 | Segmentation Dice Loss: 0.1302
+Epoch 837 | Segmentation Dice Loss: 0.1324
+Epoch 838 | Segmentation Dice Loss: 0.1322
+Epoch 839 | Segmentation Dice Loss: 0.1284
+Epoch 840 | Segmentation Dice Loss: 0.1296
+   -> Checkpoint Saved (Epoch 840)
+Epoch 841 | Segmentation Dice Loss: 0.1306
+Epoch 842 | Segmentation Dice Loss: 0.1283
+Epoch 843 | Segmentation Dice Loss: 0.1283
+Epoch 844 | Segmentation Dice Loss: 0.1278
+Epoch 845 | Segmentation Dice Loss: 0.1271
+Epoch 846 | Segmentation Dice Loss: 0.1261
+Epoch 847 | Segmentation Dice Loss: 0.1253
+Epoch 848 | Segmentation Dice Loss: 0.1243
+Epoch 849 | Segmentation Dice Loss: 0.1257
+Epoch 850 | Segmentation Dice Loss: 0.1240
+   -> Checkpoint Saved (Epoch 850)
+Epoch 851 | Segmentation Dice Loss: 0.1242
+Epoch 852 | Segmentation Dice Loss: 0.1276
+Epoch 853 | Segmentation Dice Loss: 0.1259
+Epoch 854 | Segmentation Dice Loss: 0.1260
+Epoch 855 | Segmentation Dice Loss: 0.1269
+Epoch 856 | Segmentation Dice Loss: 0.1237
+Epoch 857 | Segmentation Dice Loss: 0.1236
+Epoch 858 | Segmentation Dice Loss: 0.1195
+Epoch 859 | Segmentation Dice Loss: 0.1195
+Epoch 860 | Segmentation Dice Loss: 0.1208
+   -> Checkpoint Saved (Epoch 860)
+Epoch 861 | Segmentation Dice Loss: 0.1189
+Epoch 862 | Segmentation Dice Loss: 0.1264
+Epoch 863 | Segmentation Dice Loss: 0.1173
+Epoch 864 | Segmentation Dice Loss: 0.1205
+Epoch 865 | Segmentation Dice Loss: 0.1171
+Epoch 866 | Segmentation Dice Loss: 0.1157
+Epoch 867 | Segmentation Dice Loss: 0.1165
+Epoch 868 | Segmentation Dice Loss: 0.1153
+Epoch 869 | Segmentation Dice Loss: 0.1222
+Epoch 870 | Segmentation Dice Loss: 0.1173
+   -> Checkpoint Saved (Epoch 870)
+Epoch 871 | Segmentation Dice Loss: 0.1165
+Epoch 872 | Segmentation Dice Loss: 0.1156
+Epoch 873 | Segmentation Dice Loss: 0.1195
+Epoch 874 | Segmentation Dice Loss: 0.1163
+Epoch 875 | Segmentation Dice Loss: 0.1171
+Epoch 876 | Segmentation Dice Loss: 0.1129
+Epoch 877 | Segmentation Dice Loss: 0.1134
+Epoch 878 | Segmentation Dice Loss: 0.1137
+Epoch 879 | Segmentation Dice Loss: 0.1134
+Epoch 880 | Segmentation Dice Loss: 0.1146
+   -> Checkpoint Saved (Epoch 880)
+Epoch 881 | Segmentation Dice Loss: 0.1106
+Epoch 882 | Segmentation Dice Loss: 0.1103
+Epoch 883 | Segmentation Dice Loss: 0.1098
+Epoch 884 | Segmentation Dice Loss: 0.1134
+Epoch 885 | Segmentation Dice Loss: 0.1080
+Epoch 886 | Segmentation Dice Loss: 0.1093
+Epoch 887 | Segmentation Dice Loss: 0.1070
+Epoch 888 | Segmentation Dice Loss: 0.1097
+Epoch 889 | Segmentation Dice Loss: 0.1081
+Epoch 890 | Segmentation Dice Loss: 0.1075
+   -> Checkpoint Saved (Epoch 890)
+Epoch 891 | Segmentation Dice Loss: 0.1054
+Epoch 892 | Segmentation Dice Loss: 0.1044
+Epoch 893 | Segmentation Dice Loss: 0.1045
+Epoch 894 | Segmentation Dice Loss: 0.1067
+Epoch 895 | Segmentation Dice Loss: 0.1042
+Epoch 896 | Segmentation Dice Loss: 0.1039
+Epoch 897 | Segmentation Dice Loss: 0.1043
+Epoch 898 | Segmentation Dice Loss: 0.1022
+Epoch 899 | Segmentation Dice Loss: 0.1040
+Epoch 900 | Segmentation Dice Loss: 0.1021
+   -> Checkpoint Saved (Epoch 900)
+Epoch 901 | Segmentation Dice Loss: 0.1037
+Epoch 902 | Segmentation Dice Loss: 0.1002
+Epoch 903 | Segmentation Dice Loss: 0.1007
+Epoch 904 | Segmentation Dice Loss: 0.1009
+Epoch 905 | Segmentation Dice Loss: 0.0995
+Epoch 906 | Segmentation Dice Loss: 0.1055
+Epoch 907 | Segmentation Dice Loss: 0.0993
+Epoch 908 | Segmentation Dice Loss: 0.1008
+Epoch 909 | Segmentation Dice Loss: 0.0984
+Epoch 910 | Segmentation Dice Loss: 0.0986
+   -> Checkpoint Saved (Epoch 910)
+Epoch 911 | Segmentation Dice Loss: 0.0986
+Epoch 912 | Segmentation Dice Loss: 0.0982
+Epoch 913 | Segmentation Dice Loss: 0.0995
+Epoch 914 | Segmentation Dice Loss: 0.0957
+Epoch 915 | Segmentation Dice Loss: 0.0970
+Epoch 916 | Segmentation Dice Loss: 0.0975
+Epoch 917 | Segmentation Dice Loss: 0.0946
+Epoch 918 | Segmentation Dice Loss: 0.0951
+Epoch 919 | Segmentation Dice Loss: 0.0943
+Epoch 920 | Segmentation Dice Loss: 0.0930
+   -> Checkpoint Saved (Epoch 920)
+Epoch 921 | Segmentation Dice Loss: 0.0924
+Epoch 922 | Segmentation Dice Loss: 0.0974
+Epoch 923 | Segmentation Dice Loss: 0.0918
+Epoch 924 | Segmentation Dice Loss: 0.0917
+Epoch 925 | Segmentation Dice Loss: 0.0923
+Epoch 926 | Segmentation Dice Loss: 0.0904
+Epoch 927 | Segmentation Dice Loss: 0.0902
+Epoch 928 | Segmentation Dice Loss: 0.0925
+Epoch 929 | Segmentation Dice Loss: 0.0911
+Epoch 930 | Segmentation Dice Loss: 0.0919
+   -> Checkpoint Saved (Epoch 930)
+Epoch 931 | Segmentation Dice Loss: 0.0885
+Epoch 932 | Segmentation Dice Loss: 0.0897
+Epoch 933 | Segmentation Dice Loss: 0.0894
+Epoch 934 | Segmentation Dice Loss: 0.0930
+Epoch 935 | Segmentation Dice Loss: 0.0879
+Epoch 936 | Segmentation Dice Loss: 0.0894
+Epoch 937 | Segmentation Dice Loss: 0.0872
+Epoch 938 | Segmentation Dice Loss: 0.0909
+Epoch 939 | Segmentation Dice Loss: 0.0869
+Epoch 940 | Segmentation Dice Loss: 0.0891
+   -> Checkpoint Saved (Epoch 940)
+Epoch 941 | Segmentation Dice Loss: 0.0854
+Epoch 942 | Segmentation Dice Loss: 0.0906
+Epoch 943 | Segmentation Dice Loss: 0.0928
+Epoch 944 | Segmentation Dice Loss: 0.0850
+Epoch 945 | Segmentation Dice Loss: 0.0881
+Epoch 946 | Segmentation Dice Loss: 0.0854
+Epoch 947 | Segmentation Dice Loss: 0.0845
+Epoch 948 | Segmentation Dice Loss: 0.0850
+Epoch 949 | Segmentation Dice Loss: 0.0921
+Epoch 950 | Segmentation Dice Loss: 0.0844
+   -> Checkpoint Saved (Epoch 950)
+Epoch 951 | Segmentation Dice Loss: 0.0886
+Epoch 952 | Segmentation Dice Loss: 0.0870
+Epoch 953 | Segmentation Dice Loss: 0.0844
+Epoch 954 | Segmentation Dice Loss: 0.0829
+Epoch 955 | Segmentation Dice Loss: 0.0830
+Epoch 956 | Segmentation Dice Loss: 0.0857
+Epoch 957 | Segmentation Dice Loss: 0.0860
+Epoch 958 | Segmentation Dice Loss: 0.0840
+Epoch 959 | Segmentation Dice Loss: 0.0816
+Epoch 960 | Segmentation Dice Loss: 0.0869
+   -> Checkpoint Saved (Epoch 960)
+Epoch 961 | Segmentation Dice Loss: 0.0807
+Epoch 962 | Segmentation Dice Loss: 0.0811
+Epoch 963 | Segmentation Dice Loss: 0.0811
+Epoch 964 | Segmentation Dice Loss: 0.0818
+Epoch 965 | Segmentation Dice Loss: 0.0811
+Epoch 966 | Segmentation Dice Loss: 0.0791
+Epoch 967 | Segmentation Dice Loss: 0.0783
+Epoch 968 | Segmentation Dice Loss: 0.0812
+Epoch 969 | Segmentation Dice Loss: 0.0804
+Epoch 970 | Segmentation Dice Loss: 0.0792
+   -> Checkpoint Saved (Epoch 970)
+Epoch 971 | Segmentation Dice Loss: 0.0772
+Epoch 972 | Segmentation Dice Loss: 0.0782
+Epoch 973 | Segmentation Dice Loss: 0.0780
+Epoch 974 | Segmentation Dice Loss: 0.0777
+Epoch 975 | Segmentation Dice Loss: 0.0830
+Epoch 976 | Segmentation Dice Loss: 0.0779
+Epoch 977 | Segmentation Dice Loss: 0.0772
+Epoch 978 | Segmentation Dice Loss: 0.0765
+Epoch 979 | Segmentation Dice Loss: 0.0764
+Epoch 980 | Segmentation Dice Loss: 0.0747
+   -> Checkpoint Saved (Epoch 980)
+Epoch 981 | Segmentation Dice Loss: 0.0762
+Epoch 982 | Segmentation Dice Loss: 0.0754
+Epoch 983 | Segmentation Dice Loss: 0.0742
+Epoch 984 | Segmentation Dice Loss: 0.0743
+Epoch 985 | Segmentation Dice Loss: 0.0728
+Epoch 986 | Segmentation Dice Loss: 0.0733
+Epoch 987 | Segmentation Dice Loss: 0.0761
+Epoch 988 | Segmentation Dice Loss: 0.0739
+Epoch 989 | Segmentation Dice Loss: 0.0725
+Epoch 990 | Segmentation Dice Loss: 0.0760
+   -> Checkpoint Saved (Epoch 990)
+Epoch 991 | Segmentation Dice Loss: 0.0721
+Epoch 992 | Segmentation Dice Loss: 0.0727
+Epoch 993 | Segmentation Dice Loss: 0.0729
+Epoch 994 | Segmentation Dice Loss: 0.0708
+Epoch 995 | Segmentation Dice Loss: 0.0763
+Epoch 996 | Segmentation Dice Loss: 0.0737
+Epoch 997 | Segmentation Dice Loss: 0.0723
+Epoch 998 | Segmentation Dice Loss: 0.0697
+Epoch 999 | Segmentation Dice Loss: 0.0692
+Epoch 1000 | Segmentation Dice Loss: 0.0747
+   -> Checkpoint Saved (Epoch 1000)

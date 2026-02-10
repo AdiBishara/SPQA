@@ -1,0 +1,13 @@
+
+--- Starting High-Throughput Training on cuda ---
+✅ GPU Acceleration: Augmentation & TF32 Enabled
+--- Fast 3D Loader Initialized (Train) ---
+Data Loaded.
+Model Loaded. Resuming from Epoch 730.
+Epoch 731 | Segmentation Dice Loss: 0.2188
+Epoch 732 | Segmentation Dice Loss: 0.2955
+Epoch 733 | Segmentation Dice Loss: 0.2371
+Epoch 734 | Segmentation Dice Loss: 0.2425
+Epoch 735 | Segmentation Dice Loss: 0.2319
+Epoch 736 | Segmentation Dice Loss: 0.2165
+Epoch 737 | Segmentation Dice Loss: 0.2096

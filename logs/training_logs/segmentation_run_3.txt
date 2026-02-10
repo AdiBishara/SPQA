@@ -1,0 +1,13 @@
+
+--- Starting Training on cuda ---
+Loading Data from C:/Users/Lab/OneDrive/Desktop/SPQA/synthstrip_data_v1.5...
+--- Full Volume Augmentation Loader (Train) ---
+Target Size: (256, 256, 256)
+Data Loaded Successfully.
+Loading Model Architecture...
+Model Loaded. Continuing from Epoch 230.
+Epoch 231 | Segmentation Dice Loss: 0.0000
+Epoch 232 | Segmentation Dice Loss: 0.0000
+Epoch 233 | Segmentation Dice Loss: 0.0000
+Epoch 234 | Segmentation Dice Loss: 0.0000
+Epoch 235 | Segmentation Dice Loss: 0.0000

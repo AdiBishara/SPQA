@@ -1,0 +1,15 @@
+RUN NAME: SPQA_FullVol_Ultra
+LOG FILE: vae_run_3
+
+
+========================================
+TRAINING CONFIGURATION: SPQA_FullVol_Ultra
+INITIAL WEIGHTS: {'dice': 20.0, 'bce': 0.01, 'laplace': 0.1, 'fix_weight': 5.0, 'recon_base': 1.0}
+SCHEDULER LOGIC:
+  - Phase 1 (<0.70): Volume Only (Fix=1.0)
+  - Phase 2 (>0.70): Sharpening (Fix=2.0, SDM=0.05)
+  - Phase 3 (>0.80): Precision (Fix=10.0, Smooth=0.02)
+  - Phase 4 (>0.90): Anatomy Lock (Fix=20.0, Smooth=0.01)
+========================================
+
+--- Fast 3D Loader Initialized (Train) ---
