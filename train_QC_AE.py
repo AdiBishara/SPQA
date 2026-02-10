@@ -1,218 +1,219 @@
 import os
 import sys
-import glob
-import re
 import torch
-import torch.nn.functional as F
+import torch.nn as nn
 import torch.optim as optim
+import torch.nn.functional as F
 from torch.utils.data import DataLoader
+from torch.amp import GradScaler, autocast
+import matplotlib.pyplot as plt
 import numpy as np
+import re
+import glob
 
-# Project Imports
 from utils.config import load_config
 from utils.seeding import fix_seeds
 from utils.data.nifti_loader import NiftiDataset
 from utils.models.vae import VAE3D
+from losses.losses import VAELoss
 
 
-# --- DYNAMIC MORPHOLOGICAL CORRUPTION ---
-def morphological_corruption(mask, kernel_size=3, max_iters=5):
-    """Randomly dilates or erodes the mask to create training samples for the QC VAE."""
-    mode = "dilate" if torch.rand(1).item() > 0.5 else "erode"
-    iters = torch.randint(1, max_iters + 1, (1,)).item()
-    pad = kernel_size // 2
-    corrupted = mask.clone()
-    if mode == "dilate":
-        for _ in range(iters):
-            corrupted = F.max_pool3d(corrupted, kernel_size=kernel_size, stride=1, padding=pad)
-    else:
-        corrupted = -corrupted
-        for _ in range(iters):
-            corrupted = F.max_pool3d(corrupted, kernel_size=kernel_size, stride=1, padding=pad)
-        corrupted = -corrupted
-    return corrupted
+# --- 0. UTILS: FIND LATEST CHECKPOINT ---
+def find_latest_checkpoint(save_dir):
+    """Scans the directory for the highest epoch number."""
+    checkpoints = glob.glob(os.path.join(save_dir, "vae_epoch_*.pth"))
+    if not checkpoints:
+        return None, 0
+
+    # Extract numbers from filenames using regex
+    def extract_epoch(ckpt_path):
+        match = re.search(r'vae_epoch_(\d+).pth', ckpt_path)
+        return int(match.group(1)) if match else 0
+
+    latest_ckpt = max(checkpoints, key=extract_epoch)
+    latest_epoch = extract_epoch(latest_ckpt)
+    return latest_ckpt, latest_epoch
 
 
-# --- LOSS HELPERS ---
-def robust_dice_loss(pred, target, smooth=1e-5):
-    intersection = (pred * target).sum()
-    union = pred.sum() + target.sum()
-    dice = (2.0 * intersection + smooth) / (union + smooth)
-    return 1.0 - dice
-
-
-def get_laplacian_loss(recon_logits, target):
-    """
-    Penalizes blurriness by comparing the edge-maps of the reconstruction and the truth.
-    Forces the model to learn fine brain contours (gyri/sulci).
-    """
-    # 3D Laplacian kernel: [1, 1, 3, 3, 3]
-    kernel = torch.tensor([[[0, 0, 0], [0, 1, 0], [0, 0, 0]],
-                           [[0, 1, 0], [1, -6, 1], [0, 1, 0]],
-                           [[0, 0, 0], [0, 1, 0], [0, 0, 0]]],
-                          dtype=torch.float32, device=recon_logits.device).view(1, 1, 3, 3, 3)
-
-    recon_probs = torch.sigmoid(recon_logits)
-    edge_recon = F.conv3d(recon_probs, kernel, padding=1)
-    edge_target = F.conv3d(target, kernel, padding=1)
-
-    return F.mse_loss(edge_recon, edge_target)
-
-
-# --- FINAL HIGH-FIDELITY LOSS FUNCTION ---
-def vae_loss_function(recon, target, mu, logvar, beta=0.0):
-    """
-    Phase 2 Loss: Priority shifted to edge sharpness and anatomical detail.
-    """
-    # 1. Weighted BCE: 10x penalty for errors on brain pixels (foreground)
-    pos_weight = torch.tensor([10.0], device=recon.device)
-    bce_loss = F.binary_cross_entropy_with_logits(recon, target, pos_weight=pos_weight)
-
-    # 2. Laplacian Edge Loss: Specifically targets high-frequency contour details
-    edge_loss = get_laplacian_loss(recon, target)
-
-    # 3. Dice Loss: Global shape topology
-    recon_probs = torch.sigmoid(recon)
-    dice_loss = robust_dice_loss(recon_probs, target).mean()
-
-    # 4. KL Divergence: Regularization (Normalized)
-    kld_loss = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
-    kld_loss /= (target.numel())
-
-    # BALANCE: 50% BCE (Location), 40% Edge (Contours), 10% Dice (Overlap)
-    total_loss = (0.5 * bce_loss) + (0.4 * edge_loss) + (0.1 * dice_loss) + (beta * kld_loss)
-
-    return total_loss, dice_loss, edge_loss, kld_loss
-
-
-# --- LOGGER ---
-class HybridLogger(object):
-    def __init__(self, filepath, resume=False):
-        mode = "a" if resume else "w"
-        self.log = open(filepath, mode, encoding='utf-8')
+# --- 1. SEQUENTIAL LOGGER ---
+class SequentialLogger(object):
+    def __init__(self, log_dir):
+        os.makedirs(log_dir, exist_ok=True)
+        existing_runs = [f for f in os.listdir(log_dir) if f.startswith("vae_run_")]
+        run_numbers = [int(f.split("_")[-1].replace(".txt", "")) for f in existing_runs if
+                       f.split("_")[-1].replace(".txt", "").isdigit()]
+        self.run_number = max(run_numbers) + 1 if run_numbers else 1
+        self.log_name = f"vae_run_{self.run_number}"
+        self.log_path = os.path.join(log_dir, f"{self.log_name}.txt")
         self.terminal = sys.stdout
+        self.log = open(self.log_path, "a")
 
     def write(self, message):
+        self.terminal.write(message)
         self.log.write(message)
         self.log.flush()
-        # Clean terminal output
-        clean_keywords = ["Epoch", "Total", "Edge", "Saved", "Starting"]
-        if any(k in message for k in clean_keywords) or message.strip() == "":
-            self.terminal.write(message)
-            self.terminal.flush()
+
+    def write_file_only(self, message):
+        self.log.write(message)
+        self.log.flush()
 
     def flush(self):
         self.terminal.flush()
         self.log.flush()
 
 
-def get_next_log_file(base_dir):
-    os.makedirs(base_dir, exist_ok=True)
-    existing_logs = glob.glob(os.path.join(base_dir, "vae_run_*.txt"))
-    max_run = 0
-    for log_file in existing_logs:
-        try:
-            r = int(os.path.basename(log_file).split('_')[-1].split('.')[0])
-            if r > max_run: max_run = r
-        except:
-            continue
-    return os.path.join(base_dir, f"vae_run_{max_run + 1}.txt")
+# --- 2. VISUALIZER (3-Panel) ---
+def save_visual_check(recon, target, image, epoch, save_dir):
+    try:
+        os.makedirs(save_dir, exist_ok=True)
+        slice_idx = 128
+        img_slice = image[0, 0, slice_idx].detach().cpu().numpy()
+        gt_slice = target[0, 0, slice_idx].detach().cpu().numpy()
+        pred_slice = torch.sigmoid(recon[0, 0, slice_idx]).float().detach().cpu().numpy()
+
+        fig, axes = plt.subplots(1, 3, figsize=(15, 5))
+        axes[0].imshow(img_slice, cmap='gray')
+        axes[0].set_title("MRI Input")
+        axes[1].imshow(gt_slice, cmap='jet', alpha=0.5)
+        axes[1].set_title("Ground Truth")
+        axes[2].imshow(pred_slice, cmap='jet', alpha=0.5)
+        axes[2].set_title(f"Prediction (Epoch {epoch})")
+        for ax in axes: ax.axis('off')
+
+        save_path = os.path.join(save_dir, f"epoch_{epoch:03d}_check.png")
+        plt.savefig(save_path)
+        plt.close(fig)
+        return save_path
+    except Exception as e:
+        print(f"Error saving visual: {e}")
+        return None
 
 
+# --- 3. DYNAMIC SCHEDULER (DAMPED & STABILIZED) ---
+def update_weights_damped(criterion, avg_dice, stable_counter):
+    new_weights = criterion.w.copy()
+    phase = "Phase 1 (Volume)"
+
+    # REDUCED TO 8 AS REQUESTED
+    STABILITY_THRESHOLD = 8
+
+    if avg_dice >= 0.90 and stable_counter >= STABILITY_THRESHOLD:
+        new_weights.update({'dice': 20.0, 'bce': 0.15, 'laplace': 0.01, 'fix_weight': 10.0})
+        phase = "Phase 4 (Anatomy Lock)"
+    elif avg_dice >= 0.80 and stable_counter >= STABILITY_THRESHOLD:
+        new_weights.update({'dice': 20.0, 'bce': 0.10, 'laplace': 0.02, 'fix_weight': 6.0})
+        phase = "Phase 3 (Precision)"
+    elif avg_dice >= 0.70 and stable_counter >= STABILITY_THRESHOLD:
+        new_weights.update({'dice': 20.0, 'bce': 0.05, 'laplace': 0.05, 'fix_weight': 3.0})
+        phase = "Phase 2 (Sharpening)"
+    else:
+        new_weights.update({'dice': 10.0, 'bce': 0.0, 'laplace': 0.0, 'fix_weight': 1.0})
+        phase = "Phase 1 (Volume)"
+
+    criterion.w = new_weights
+    return phase
+
+
+# --- 4. CORRUPTION ---
+def morphological_corruption(mask):
+    with torch.no_grad():
+        mode = "dilate" if torch.rand(1).item() > 0.5 else "erode"
+        iters = torch.randint(1, 6, (1,)).item()
+        corrupted = mask.clone()
+        for _ in range(iters):
+            if mode == "dilate":
+                corrupted = F.max_pool3d(corrupted, kernel_size=3, stride=1, padding=1)
+            else:
+                corrupted = -F.max_pool3d(-corrupted, kernel_size=3, stride=1, padding=1)
+    return corrupted
+
+
+# --- 5. TRAINING LOOP ---
 def train_vae():
-    # 1. INITIAL SETUP
-    config_path = r"C:\Users\Lab\OneDrive\Desktop\SPQA\params\config.yaml"
-    config = load_config(config_path)
+    config = load_config(r"C:\Users\Lab\OneDrive\Desktop\SPQA\params\config.yaml")
     fix_seeds(config['seed'])
-
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
     log_dir = r"C:\Users\Lab\OneDrive\Desktop\SPQA\logs\training_logs"
-    log_file = get_next_log_file(log_dir)
-    sys.stdout = HybridLogger(log_file)
-
-    print(f"--- STARTING RESIDUAL HIGH-FIDELITY VAE TRAINING ---")
-    print("✅ Architecture: Residual with 8x8x8 Bottleneck")
-    print("✅ Sharpener: Laplacian Edge Loss Integrated")
-
     save_dir = r"C:\Users\Lab\OneDrive\Desktop\SPQA\logs\vae_checkpoints"
+    vis_dir = r"C:\Users\Lab\OneDrive\Desktop\SPQA\logs\visual_progress"
+    os.makedirs(vis_dir, exist_ok=True)
     os.makedirs(save_dir, exist_ok=True)
 
-    # 2. DATA LOADING
-    dataset = NiftiDataset(
-        img_dir=config['Data']['raw_data_root'],
-        list_path=config['Data']['training_ids'],
-        image_size=config['model']['image_size'],
-        is_train=True
-    )
+    logger = SequentialLogger(log_dir)
+    sys.stdout = logger
 
-    loader = DataLoader(
-        dataset,
-        batch_size=config['Train']['batch_size'],
-        shuffle=True,
-        num_workers=4,
-        persistent_workers=True,
-        pin_memory=True
-    )
+    # --- AUTOMATIC RESUME LOGIC ---
+    model = VAE3D(in_channels=2, out_channels=1, latent_dim=2048).to(device)
+    ckpt_path, start_epoch = find_latest_checkpoint(save_dir)
 
-    # 3. MODEL & OPTIMIZER
-    vae = VAE3D(
-        in_channels=2,  # Image + Mask
-        out_channels=1,
-        image_size=config['model']['image_size'],
-        latent_dim=config['model']['latent_dim']  # 2048 recommended
-    ).to(device)
+    if ckpt_path:
+        print(f"RESUMING FROM: {os.path.basename(ckpt_path)}")
+        model.load_state_dict(torch.load(ckpt_path, map_location=device))
+    else:
+        print("NO CHECKPOINT FOUND: Starting from scratch.")
 
-    # Low Learning Rate for detail stability
-    optimizer = optim.Adam(vae.parameters(), lr=5e-5)
+    print(f"RUN NAME: {config['project_name']} | LOG: {logger.log_name}\n")
 
-    # 4. TRAINING LOOP
-    vae.train()
-    print("Training initialized.")
+    optimizer = optim.Adam(model.parameters(), lr=1e-3)
+    criterion = VAELoss(config=config, kld_weight=0.005).to(device)
+    bce_stable = nn.BCEWithLogitsLoss(pos_weight=torch.tensor([5.0]).to(device))
+    scaler = GradScaler('cuda')
 
-    for epoch in range(config['Train']['epochs']):
-        epoch_total, epoch_dice, epoch_edge, epoch_kld = 0, 0, 0, 0
-        valid_batches = 0
+    logger.write_file_only(f"RESUME START: Epoch {start_epoch}\nSTABILITY THRESHOLD: 8\n")
 
-        # Beta schedule (Small to allow unconstrained reconstruction)
-        if epoch < 50:
-            beta = 1e-7
-        else:
-            beta = 0.0005 * ((epoch - 50) / 100)
-            if beta > 0.0005: beta = 0.0005
+    dataset = NiftiDataset(img_dir=config['Data']['raw_data_root'], list_path=config['Data']['training_ids'],
+                           image_size=config['model']['image_size'], is_train=True)
+    loader = DataLoader(dataset, batch_size=1, shuffle=True, num_workers=0, pin_memory=True)
 
-        for batch in loader:
-            images = batch['image'].to(device, non_blocking=True)
-            clean_masks = batch['mask'].to(device, non_blocking=True)
+    rolling_dice = 0.0
+    stable_counter = 0
 
-            # Corrupt the mask for the denoising task
-            corrupted_masks = morphological_corruption(clean_masks, kernel_size=3, max_iters=5)
-            vae_input = torch.cat([images, corrupted_masks], dim=1)
+    for epoch in range(start_epoch, config['Train']['epochs']):
+        model.train()
+        epoch_dice, epoch_loss, count = 0, 0, 0
 
+        for i, batch in enumerate(loader):
             optimizer.zero_grad()
-            recon, mu, logvar = vae(vae_input)
+            img, mask = batch['image'].to(device), (batch['mask'].to(device) > 0.5).float()
+            corr = morphological_corruption(mask)
 
-            loss, d_loss, e_loss, k_loss = vae_loss_function(recon, clean_masks, mu, logvar, beta=beta)
+            with autocast('cuda'):
+                recon, mu, logvar = model(torch.cat([img, corr], dim=1))
+                d_acc = (2. * (torch.sigmoid(recon) * mask).sum()) / (torch.sigmoid(recon).sum() + mask.sum() + 1e-6)
+                if rolling_dice < 0.70:
+                    loss = bce_stable(recon, mask) + (1.0 - d_acc)
+                else:
+                    loss, _, _, _ = criterion(recon, mask, mu, logvar, corrupted_input=corr, calculate_boundary=True)
 
-            if torch.isnan(loss):
-                continue
+            scaler.scale(loss).backward()
+            scaler.unscale_(optimizer)
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)  # Clip Gradients
+            scaler.step(optimizer)
+            scaler.update()
 
-            loss.backward()
-            torch.nn.utils.clip_grad_norm_(vae.parameters(), max_norm=0.5)
-            optimizer.step()
+            epoch_dice += d_acc.item()
+            epoch_loss += loss.item()
+            count += 1
 
-            epoch_total += loss.item()
-            epoch_dice += d_loss.item()
-            epoch_edge += e_loss.item()
-            epoch_kld += k_loss.item()
-            valid_batches += 1
+            if (epoch + 1) % 10 == 0 and i == 0:
+                v_path = save_visual_check(recon, mask, img, epoch + 1, vis_dir)
+                if v_path: logger.write_file_only(f"Visual Saved: {os.path.basename(v_path)}\n")
 
-        div = valid_batches if valid_batches > 0 else 1
+        new_avg_dice = epoch_dice / count
+        if new_avg_dice >= rolling_dice - 0.01:
+            stable_counter += 1
+        else:
+            stable_counter = 0
+
+        rolling_dice = new_avg_dice
+        current_phase = update_weights_damped(criterion, rolling_dice, stable_counter)
+
         print(
-            f"Epoch {epoch + 1:03d} | Total: {epoch_total / div:.4f} | DiceLoss: {epoch_dice / div:.4f} | EdgeLoss: {epoch_edge / div:.6f} | KLD: {epoch_kld / div:.4f}")
+            f"Epoch {epoch + 1:03d} | {current_phase} (Stable: {stable_counter}) | Dice: {rolling_dice:.4f} | Loss: {epoch_loss / count:.4f}")
 
         if (epoch + 1) % 10 == 0:
-            torch.save(vae.state_dict(), os.path.join(save_dir, f"vae_epoch_{epoch + 1}.pth"))
-            print(f"   -> Saved Checkpoint (Epoch {epoch + 1})")
+            torch.save(model.state_dict(), os.path.join(save_dir, f"vae_epoch_{epoch + 1}.pth"))
 
 
 if __name__ == "__main__":

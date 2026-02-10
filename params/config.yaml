@@ -4,18 +4,17 @@ mode: "train"
 method: "MC"
 seed: 42
 
-# --- MODEL ARCHITECTURE (Doubled Capacity) ---
+# --- MODEL ARCHITECTURE (Main Segmentation Model) ---
 model:
   architecture: "unet3d"
   in_channels: 1
   n_classes: 1
-  # DOUBLED FILTERS: Uses more VRAM, learns much finer details
+  # This controls your main UNet, keeping it high-capacity for quality
   channels: [32, 64, 128, 256, 512]
   strides: [2, 2, 2, 2]
   dropout_rate: 0.2
   image_size: [256, 256, 256]
-
-  latent_dim: 2048
+  latent_dim: 2048 # UPDATED to match VAE bottleneck
   model_path: ""
 
 # --- DATA CONFIGURATION ---
@@ -27,22 +26,27 @@ Data:
 
 # --- TRAINING HYPERPARAMETERS ---
 Train:
-  # AGGRESSIVE BATCH SIZE: Fills the 63GB VRAM
-  # If you get OOM, drop this to 2
-  batch_size: 4
-
+  batch_size: 1 # UPDATED: Use 1 with accumulation_steps=4 in the code
   epochs: 1000
-  # Increased LR because batch_size is larger (Linear Scaling Rule)
   learning_rate_gen: 0.0001
-
   patience: 50
   save_dir: "C:/Users/Lab/OneDrive/Desktop/SPQA/logs/checkpoints_ultra"
 
+# --- LOSS WEIGHT PARAMETERS ---
+# These are used in Phase 2 once Dice hits > 0.75
+LossWeights:
+  dice: 20.0
+  bce: 0.01      # This is the Boundary/SDM weight
+  laplace: 0.1   # This is the Active Contour weight
+  fix_weight: 5.0
+  recon_base: 1.0
+
+# --- QUALITY CONTROL (VAE Settings) ---
 QC:
   enabled: True
   architecture: "vae3d"
-  in_channels: 1          # VAE sees 1 channel (the mask)
+  in_channels: 2
   checkpoint_dir: "C:/Users/Lab/OneDrive/Desktop/SPQA/logs/vae_checkpoints"
-
-  best_model_path: "C:/Users/Lab/OneDrive/Desktop/SPQA/logs/vae_checkpoints/vae_epoch_330.pth"
-  latent_dim: 2048
+  # Update this path once you have a high-performing Phase 2 model
+  best_model_path: "C:/Users/Lab/OneDrive/Desktop/SPQA/logs/vae_checkpoints/vae_epoch_best.pth"
+  latent_dim: 2048 # UPDATED to match VAE bottleneck
