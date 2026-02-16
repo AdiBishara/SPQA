@@ -2,124 +2,134 @@ import torch
 import torch.nn as nn
 
 
-class ResidualBlock3D(nn.Module):
+class UpsampleBlock(nn.Module):
     """
-    Ensures fine anatomical details (contours) are preserved through
-    skip connections, preventing the 'fuzzy blob' effect.
+    Replaces ConvTranspose with Upsample + Conv to eliminate checkerboard artifacts.
     """
 
+    def __init__(self, in_ch, out_ch):
+        super(UpsampleBlock, self).__init__()
+        self.block = nn.Sequential(
+            nn.Upsample(scale_factor=2, mode='trilinear', align_corners=False),
+            nn.Conv3d(in_ch, out_ch, 3, padding=1),
+            nn.GroupNorm(4, out_ch),  # Stable norm for small batches
+            nn.LeakyReLU(0.2, inplace=False),
+            nn.Conv3d(out_ch, out_ch, 3, padding=1),
+            nn.GroupNorm(4, out_ch),
+            nn.LeakyReLU(0.2, inplace=False)
+        )
+
+    def forward(self, x):
+        return self.block(x)
+
+
+class ResidualBlock3D(nn.Module):
     def __init__(self, channels):
         super(ResidualBlock3D, self).__init__()
         self.conv = nn.Sequential(
             nn.Conv3d(channels, channels, kernel_size=3, padding=1),
-            nn.BatchNorm3d(channels),
-            nn.LeakyReLU(0.2, inplace=True),
+            nn.GroupNorm(4, channels),
+            nn.LeakyReLU(0.2, inplace=False),
             nn.Conv3d(channels, channels, kernel_size=3, padding=1),
-            nn.BatchNorm3d(channels)
+            nn.GroupNorm(4, channels)
         )
-        self.relu = nn.LeakyReLU(0.2, inplace=True)
+        self.relu = nn.LeakyReLU(0.2, inplace=False)
 
     def forward(self, x):
-        # The residual connection x + conv(x) allows fine gradients to flow
         return self.relu(x + self.conv(x))
-
-
-class Encoder(nn.Module):
-    def __init__(self, in_channels, channels, strides):
-        super(Encoder, self).__init__()
-        layers = []
-        for c, s in zip(channels, strides):
-            layers.append(
-                nn.Sequential(
-                    nn.Conv3d(in_channels, c, kernel_size=3, stride=s, padding=1),
-                    nn.BatchNorm3d(c),
-                    nn.LeakyReLU(0.2, inplace=True),
-                    ResidualBlock3D(c)
-                )
-            )
-            in_channels = c
-        self.encoder = nn.Sequential(*layers)
-
-    def forward(self, x):
-        return self.encoder(x)
-
-
-class Decoder(nn.Module):
-    def __init__(self, out_channels, channels, strides):
-        super(Decoder, self).__init__()
-        layers = []
-        rev_channels = list(reversed(channels))
-        rev_strides = list(reversed(strides))
-        in_c = rev_channels[0]
-
-        for i, (c, s) in enumerate(zip(rev_channels[1:] + [out_channels], rev_strides)):
-            layers.append(
-                nn.Sequential(
-                    nn.ConvTranspose3d(in_c, c, kernel_size=3, stride=s, padding=1, output_padding=s - 1),
-                    nn.BatchNorm3d(c),
-                    nn.LeakyReLU(0.2, inplace=True),
-                    # We only use Residual Blocks in the upsampling layers
-                    ResidualBlock3D(c) if i < len(rev_channels) else nn.Identity()
-                )
-            )
-            in_c = c
-        self.decoder = nn.Sequential(*layers)
-
-    def forward(self, x):
-        return self.decoder(x)
 
 
 class VAE3D(nn.Module):
     def __init__(self, in_channels=2, out_channels=1, image_size=[256, 256, 256], latent_dim=2048):
-        """
-        image_size: (D, H, W)
-        latent_dim: Set to 2048 for high-fidelity contour memory
-        """
         super(VAE3D, self).__init__()
 
-        self.channels = [32, 64, 128, 256, 512]
-        self.strides = [2, 2, 2, 2, 2]  # 5 downsamples total (256 -> 8)
+        # --- ENCODER (Standard) ---
+        self.enc1 = nn.Sequential(
+            nn.Conv3d(in_channels, 16, 3, 2, 1),
+            nn.GroupNorm(4, 16), nn.LeakyReLU(0.2), ResidualBlock3D(16)
+        )
+        self.enc2 = nn.Sequential(
+            nn.Conv3d(16, 32, 3, 2, 1),
+            nn.GroupNorm(4, 32), nn.LeakyReLU(0.2), ResidualBlock3D(32)
+        )
+        self.enc3 = nn.Sequential(
+            nn.Conv3d(32, 64, 3, 2, 1),
+            nn.GroupNorm(8, 64), nn.LeakyReLU(0.2), ResidualBlock3D(64)
+        )
+        self.enc4 = nn.Sequential(
+            nn.Conv3d(64, 128, 3, 2, 1),
+            nn.GroupNorm(8, 128), nn.LeakyReLU(0.2), ResidualBlock3D(128)
+        )
+        self.enc5 = nn.Sequential(
+            nn.Conv3d(128, 256, 3, 2, 1),
+            nn.GroupNorm(8, 256), nn.LeakyReLU(0.2), ResidualBlock3D(256)
+        )
 
-        self.encoder_net = Encoder(in_channels, self.channels, self.strides)
+        # --- BOTTLENECK ---
+        self.pool = nn.AdaptiveAvgPool3d(1)
+        self.fc_mu = nn.Linear(256, latent_dim)
+        self.fc_logvar = nn.Linear(256, latent_dim)
 
-        # Bottleneck spatial size is 8x8x8 for a 256x256x256 input
-        self.bottleneck_size = [s // 32 for s in image_size]
-        self.last_channel = self.channels[-1]
+        # --- DENSE SPATIAL PROJECTOR (The Fix) ---
+        # Instead of broadcasting, we project directly to a 4x4x4 volume with 128 channels
+        # This gives the model a "Chunk of Clay" that already has shape info
+        self.spatial_base_dim = 4
+        self.spatial_base_ch = 128
+        self.decoder_projection = nn.Linear(
+            latent_dim,
+            self.spatial_base_ch * self.spatial_base_dim ** 3
+        )
 
-        # Calculate flattened features (512 * 8 * 8 * 8)
-        self.flat_features = self.last_channel * self.bottleneck_size[0] * self.bottleneck_size[1] * \
-                             self.bottleneck_size[2]
+        # --- DECODER (Upsample-based) ---
+        # We need 6 upsamples to go from 4x4x4 -> 256x256x256
+        self.dec6 = UpsampleBlock(128, 128)  # 4 -> 8
+        self.dec5 = UpsampleBlock(128, 64)  # 8 -> 16
+        self.dec4 = UpsampleBlock(64, 64)  # 16 -> 32
+        self.dec3 = UpsampleBlock(64, 32)  # 32 -> 64
+        self.dec2 = UpsampleBlock(32, 16)  # 64 -> 128
+        self.dec1 = UpsampleBlock(16, 16)  # 128 -> 256
 
-        # Latent space heads
-        self.fc_mu = nn.Linear(self.flat_features, latent_dim)
-        self.fc_logvar = nn.Linear(self.flat_features, latent_dim)
+        self.final_conv = nn.Conv3d(16, out_channels, kernel_size=1)
+        self.apply(self._init_weights)
 
-        # Decoder entry
-        self.decoder_input = nn.Linear(latent_dim, self.flat_features)
-        self.decoder_net = Decoder(out_channels, self.channels, self.strides)
-
-    def encode(self, x):
-        h = self.encoder_net(x)
-        h = torch.flatten(h, start_dim=1)
-        mu = self.fc_mu(h)
-        logvar = self.fc_logvar(h)
-
-        # Clamp for numerical stability (prevents Exploding Gradient/NaNs)
-        logvar = torch.clamp(logvar, min=-10, max=10)
-        return mu, logvar
+    def _init_weights(self, m):
+        if isinstance(m, (nn.Conv3d, nn.Linear)):
+            nn.init.orthogonal_(m.weight)
 
     def reparameterize(self, mu, logvar):
         std = torch.exp(0.5 * logvar)
-        eps = torch.randn_like(std)
-        return mu + eps * std
-
-    def decode(self, z):
-        h = self.decoder_input(z)
-        h = h.view(-1, self.last_channel, *self.bottleneck_size)
-        return self.decoder_net(h)
+        return mu + torch.randn_like(std) * std
 
     def forward(self, x):
-        mu, logvar = self.encode(x)
+        # Clamp inputs to prevent outliers
+        x = torch.clamp(x, -5, 5)
+
+        # Encode
+        x1 = self.enc1(x)
+        x2 = self.enc2(x1)
+        x3 = self.enc3(x2)
+        x4 = self.enc4(x3)
+        x5 = self.enc5(x4)
+
+        # Bottleneck
+        pooled = self.pool(x5).view(x5.shape[0], -1)
+        mu = self.fc_mu(pooled)
+        logvar = torch.clamp(self.fc_logvar(pooled), -10, 10)
         z = self.reparameterize(mu, logvar)
-        recon = self.decode(z)
-        return recon, mu, logvar
+
+        # Decode (Dense Projection)
+        # 1. Project latent vector to a massive flat vector
+        z_spatial = self.decoder_projection(z)
+        # 2. Reshape into a 3D volume (Batch, 128, 4, 4, 4)
+        z_vol = z_spatial.view(-1, self.spatial_base_ch, self.spatial_base_dim, self.spatial_base_dim,
+                               self.spatial_base_dim)
+
+        # 3. Upsample path
+        d6 = self.dec6(z_vol)  # -> 8
+        d5 = self.dec5(d6)  # -> 16
+        d4 = self.dec4(d5)  # -> 32
+        d3 = self.dec3(d4)  # -> 64
+        d2 = self.dec2(d3)  # -> 128
+        d1 = self.dec1(d2)  # -> 256
+
+        return self.final_conv(d1), mu, logvar

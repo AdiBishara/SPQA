@@ -63,18 +63,29 @@ class NiftiDataset(Dataset):
         img_path, mask_path, subject_id = self.file_list[idx]
 
         try:
-            img = nib.load(img_path).get_fdata().astype(np.float32)
-            mask = nib.load(mask_path).get_fdata().astype(np.float32)
+            img_obj = nib.load(img_path)
+            mask_obj = nib.load(mask_path)
 
-            # --- CRITICAL FIX: FORCE BINARY MASK ---
-            # If mask has values like 255, this sets them to 1.0
-            # If mask is 0.001 (soft), this sets it to 1.0
-            mask = (mask > 0).astype(np.float32)
-            # ---------------------------------------
+            img = img_obj.get_fdata().astype(np.float32)
+            mask = mask_obj.get_fdata().astype(np.float32)
 
-            # Normalize Image
-            if np.max(img) > 0:
-                img = (img - np.min(img)) / (np.max(img) - np.min(img))
+            # 1. FORCE BINARY MASK
+            mask = (mask > 0.5).astype(np.float32)
+
+            # 2. ROBUST NORMALIZATION (Z-Score)
+            # This makes anatomical features much easier for the VAE to 'see'
+            mean = np.mean(img)
+            std = np.std(img)
+            if std > 0:
+                img = (img - mean) / std
+
+            # 3. RANGE CLIPPING
+            # Clip intensities to -3 to +3 standard deviations to remove noise
+            img = np.clip(img, -3.0, 3.0)
+
+            # 4. FINAL SCALE TO [0, 1]
+            # This ensures the MRI and Mask are on the EXACT same scale for concatenation
+            img = (img - img.min()) / (img.max() - img.min() + 1e-8)
 
             img, mask = self._resize_volume(img, mask)
 
