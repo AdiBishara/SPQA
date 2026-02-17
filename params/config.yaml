@@ -1,52 +1,74 @@
-# --- PROJECT SETTINGS ---
+# ==============================================================================
+# SPQA PROJECT CONFIGURATION: VAE 3D Training
+# ==============================================================================
+
+# --- Global Settings ---
 project_name: "SPQA_FullVol_Ultra"
 mode: "train"
-method: "MC"
 seed: 42
 
-# --- MODEL ARCHITECTURE (Main Segmentation Model) ---
+# --- Model Architecture ---
 model:
-  architecture: "unet3d"
-  in_channels: 1
-  n_classes: 1
-  # This controls your main UNet, keeping it high-capacity for quality
-  channels: [32, 64, 128, 256, 512]
-  strides: [2, 2, 2, 2]
-  dropout_rate: 0.2
+  architecture: "vae3d"
+  in_channels: 2          # Image + Corrupted Mask
+  out_channels: 1         # Reconstructed Mask
   image_size: [256, 256, 256]
-  latent_dim: 2048 # UPDATED to match VAE bottleneck
-  model_path: ""
+  latent_dim: 2048        # VAE Bottleneck size
 
-# --- DATA CONFIGURATION ---
-Data:
+# --- Data Paths ---
+data:
+  raw_data_root: "C:/Users/Lab/OneDrive/Desktop/SPQA/synthstrip_data_v1.5"
   training_ids: "C:/Users/Lab/OneDrive/Desktop/SPQA/fold_4/training_ids.txt"
   test_ids: "C:/Users/Lab/OneDrive/Desktop/SPQA/fold_4/test_ids.txt"
-  raw_data_root: "C:/Users/Lab/OneDrive/Desktop/SPQA/synthstrip_data_v1.5"
-  image_size: [256, 256, 256]
 
-# --- TRAINING HYPERPARAMETERS ---
-Train:
-  batch_size: 1 # UPDATED: Use 1 with accumulation_steps=4 in the code
+# --- Training Infrastructure ---
+train:
+  batch_size: 1           # Optimized for 256^3 volumes on high-VRAM GPUs
   epochs: 1000
-  learning_rate_gen: 0.0001
-  patience: 50
-  save_dir: "C:/Users/Lab/OneDrive/Desktop/SPQA/logs/checkpoints_ultra"
+  learning_rate: 0.001
+  save_dir: "C:/Users/Lab/OneDrive/Desktop/SPQA/logs/vae_checkpoints"
+  vis_dir: "C:/Users/Lab/OneDrive/Desktop/SPQA/logs/visual_progress"
 
-# --- LOSS WEIGHT PARAMETERS ---
-# These are used in Phase 2 once Dice hits > 0.75
-LossWeights:
-  dice: 20.0
-  bce: 0.01      # This is the Boundary/SDM weight
-  laplace: 0.1   # This is the Active Contour weight
-  fix_weight: 5.0
-  recon_base: 1.0
+# --- Dynamic Training Phases (The Edge Hunter) ---
+# Each phase activates once the average Dice score hits the 'threshold'.
+# This allows the model to prioritize volume first, then boundaries.
+phases:
+  phase1_volume:
+    threshold: 0.0
+    dice: 10.0
+    bce: 0.0
+    laplace: 0.0
+    fix_weight: 1.0
+    boundary: 0.0
 
-# --- QUALITY CONTROL (VAE Settings) ---
-QC:
-  enabled: True
-  architecture: "vae3d"
-  in_channels: 2
-  checkpoint_dir: "C:/Users/Lab/OneDrive/Desktop/SPQA/logs/vae_checkpoints"
-  # Update this path once you have a high-performing Phase 2 model
-  best_model_path: "C:/Users/Lab/OneDrive/Desktop/SPQA/logs/vae_checkpoints/vae_epoch_best.pth"
-  latent_dim: 2048 # UPDATED to match VAE bottleneck
+  phase2_sharpening:
+    threshold: 0.80       # Starts when Dice >= 0.80
+    dice: 20.0
+    bce: 0.05
+    laplace: 0.05
+    fix_weight: 3.0
+    boundary: 0.8
+
+  phase3_precision:
+    threshold: 0.900      # Starts when Dice >= 0.875
+    dice: 20.0
+    bce: 0.10
+    laplace: 0.001
+    fix_weight: 6.0
+    boundary: 3.0
+
+  phase4_anatomy_lock:
+    threshold: 0.925       # Starts when Dice >= 0.90
+    dice: 20.0
+    bce: 0.15
+    laplace: 0.0
+    fix_weight: 10.0
+    boundary: 5.0
+
+  phase5_ultra_fidelity:
+    threshold: 0.95       # Starts when Dice >= 0.95
+    dice: 25.0
+    bce: 0.20
+    laplace: 0.0
+    fix_weight: 15.0
+    boundary: 10.0
