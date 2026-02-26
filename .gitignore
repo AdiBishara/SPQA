@@ -3,4 +3,6 @@ results_evaluation/
 *.pth
 synthstrip_data_v1.5
 train_QC_GAN.py
+__pycache__/
+.idea/
 
