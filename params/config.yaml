@@ -1,74 +1,68 @@
-# ==============================================================================
-# SPQA PROJECT CONFIGURATION: VAE 3D Training
-# ==============================================================================
-
-# --- Global Settings ---
-project_name: "SPQA_FullVol_Ultra"
-mode: "train"
+# SPQA Config - Reconstructed from Successful Run 28
 seed: 42
 
-# --- Model Architecture ---
-model:
-  architecture: "vae3d"
-  in_channels: 2          # Image + Corrupted Mask
-  out_channels: 1         # Reconstructed Mask
-  image_size: [256, 256, 256]
-  latent_dim: 2048        # VAE Bottleneck size
-
-# --- Data Paths ---
 data:
-  raw_data_root: "C:/Users/Lab/OneDrive/Desktop/SPQA/synthstrip_data_v1.5"
-  training_ids: "C:/Users/Lab/OneDrive/Desktop/SPQA/fold_4/training_ids.txt"
-  test_ids: "C:/Users/Lab/OneDrive/Desktop/SPQA/fold_4/test_ids.txt"
+  raw_data_root: 'C:\Users\Lab\OneDrive\Desktop\SPQA\synthstrip_data_v1.5'
+  training_ids: 'C:\Users\Lab\OneDrive\Desktop\SPQA\fold_4\training_ids.txt'
 
-# --- Training Infrastructure ---
+model:
+  in_channels: 2
+  out_channels: 1
+  latent_dim: 2048
+  image_size: [256, 256, 256]
+
 train:
-  batch_size: 1           # Optimized for 256^3 volumes on high-VRAM GPUs
-  epochs: 1000
-  learning_rate: 0.001
-  save_dir: "C:/Users/Lab/OneDrive/Desktop/SPQA/logs/vae_checkpoints"
-  vis_dir: "C:/Users/Lab/OneDrive/Desktop/SPQA/logs/visual_progress"
+  batch_size: 1
+  accumulation_steps: 4
+  learning_rate: 0.0001  # Matches your successful lower LR
+  epochs: 1500
+  save_dir: 'C:\Users\Lab\OneDrive\Desktop\SPQA\logs\vae_checkpoints'
 
-# --- Dynamic Training Phases (The Edge Hunter) ---
-# Each phase activates once the average Dice score hits the 'threshold'.
-# This allows the model to prioritize volume first, then boundaries.
 phases:
   phase1_volume:
     threshold: 0.0
-    dice: 10.0
-    bce: 0.0
-    laplace: 0.0
-    fix_weight: 1.0
+    dice: 8.0
     boundary: 0.0
-
-  phase2_sharpening:
-    threshold: 0.80       # Starts when Dice >= 0.80
-    dice: 20.0
-    bce: 0.05
-    laplace: 0.05
-    fix_weight: 3.0
-    boundary: 0.8
-
-  phase3_precision:
-    threshold: 0.900      # Starts when Dice >= 0.875
-    dice: 20.0
-    bce: 0.10
-    laplace: 0.001
-    fix_weight: 6.0
-    boundary: 3.0
-
-  phase4_anatomy_lock:
-    threshold: 0.925       # Starts when Dice >= 0.90
-    dice: 20.0
-    bce: 0.15
     laplace: 0.0
-    fix_weight: 10.0
-    boundary: 5.0
+    pixel: 0.125
+    fix_weight: 0.125
 
-  phase5_ultra_fidelity:
-    threshold: 0.95       # Starts when Dice >= 0.95
-    dice: 25.0
-    bce: 0.20
-    laplace: 0.0
-    fix_weight: 15.0
-    boundary: 10.0
+  phase2_micro1:
+    threshold: 0.85
+    dice: 0.96
+    boundary: 0.128
+    laplace: 0.1
+    pixel: 0.05
+    fix_weight: 0.05
+
+  phase2_micro2:
+    threshold: 0.875
+    dice: 1.0
+    boundary: 0.68
+    laplace: 0.2
+    pixel: 0.03
+    fix_weight: 0.03
+
+  phase3_micro1:
+    threshold: 0.90
+    dice: 1.0
+    boundary: 0.96
+    laplace: 0.4
+    pixel: 0.01
+    fix_weight: 0.01
+
+  phase4_micro1:
+    threshold: 0.925
+    dice: 0.5
+    boundary: 3.2
+    laplace: 1.28
+    pixel: 0.005
+    fix_weight: 0.005
+
+  phase5_ultra:
+    threshold: 0.95
+    dice: 0.2
+    boundary: 8.0
+    laplace: 4.0
+    pixel: 0.0
+    fix_weight: 0.0

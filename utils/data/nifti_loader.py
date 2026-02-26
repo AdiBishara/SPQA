@@ -4,12 +4,12 @@ import numpy as np
 import nibabel as nib
 from torch.utils.data import Dataset
 
-
 class NiftiDataset(Dataset):
     def __init__(self, img_dir, list_path, is_train=True, image_size=(256, 256, 256), transform=None):
         self.data_root = img_dir
         self.is_train = is_train
 
+        # Standardize target size
         if isinstance(image_size, int):
             self.target_size = (image_size, image_size, image_size)
         elif isinstance(image_size, list):
@@ -31,27 +31,25 @@ class NiftiDataset(Dataset):
 
             self.file_list.append((img_path, mask_path, subject_id))
 
-        print(f"--- Fast 3D Loader Initialized ({'Train' if is_train else 'Test'}) ---")
+        print(f"--- SPQA Breakout Loader (Foreground-Normalized) ---")
 
     def __len__(self):
         return len(self.ids)
 
     def _resize_volume(self, img, mask):
+        """Center crops or pads the volume to the target resolution."""
         d, h, w = img.shape
         td, th, tw = self.target_size
 
-        # Padding
         pad_d, pad_h, pad_w = max(0, td - d), max(0, th - h), max(0, tw - w)
         if pad_d > 0 or pad_h > 0 or pad_w > 0:
             pd1, pd2 = pad_d // 2, pad_d - (pad_d // 2)
             ph1, ph2 = pad_h // 2, pad_h - (pad_h // 2)
             pw1, pw2 = pad_w // 2, pad_w - (pad_w // 2)
-
             img = np.pad(img, ((pd1, pd2), (ph1, ph2), (pw1, pw2)), mode='constant')
             mask = np.pad(mask, ((pd1, pd2), (ph1, ph2), (pw1, pw2)), mode='constant')
             d, h, w = img.shape
 
-        # Center Crop
         if d > td or h > th or w > tw:
             z, y, x = (d - td) // 2, (h - th) // 2, (w - tw) // 2
             img = img[z:z + td, y:y + th, x:x + tw]
@@ -67,32 +65,39 @@ class NiftiDataset(Dataset):
             mask_obj = nib.load(mask_path)
 
             img = img_obj.get_fdata().astype(np.float32)
-            mask = mask_obj.get_fdata().astype(np.float32)
+            mask = (mask_obj.get_fdata() > 0.5).astype(np.float32)
 
-            # 1. FORCE BINARY MASK
-            mask = (mask > 0.5).astype(np.float32)
+            # --- BREAKOUT NORMALIZATION: FOREGROUND ONLY ---
+            # Identify actual brain tissue (non-zero intensity)
+            foreground_mask = img > 0
+            foreground_voxels = img[foreground_mask]
 
-            # 2. ROBUST NORMALIZATION (Z-Score)
-            # This makes anatomical features much easier for the VAE to 'see'
-            mean = np.mean(img)
-            std = np.std(img)
-            if std > 0:
-                img = (img - mean) / std
+            if len(foreground_voxels) > 0:
+                # 1. Z-Score using ONLY tissue stats to ignore 'air' noise
+                mean, std = foreground_voxels.mean(), foreground_voxels.std()
+                img = (img - mean) / (std + 1e-8)
 
-            # 3. RANGE CLIPPING
-            # Clip intensities to -3 to +3 standard deviations to remove noise
-            img = np.clip(img, -3.0, 3.0)
+                # 2. Hard-Clip anatomical range (-3 to +3 SD)
+                img = np.clip(img, -3.0, 3.0)
 
-            # 4. FINAL SCALE TO [0, 1]
-            # This ensures the MRI and Mask are on the EXACT same scale for concatenation
-            img = (img - img.min()) / (img.max() - img.min() + 1e-8)
+                # 3. Background Suppression: Set all air/noise to the floor
+                img[~foreground_mask] = -3.0
+
+                # 4. Final Min-Max scale to [0, 1]
+                img = (img - img.min()) / (img.max() - img.min() + 1e-8)
+            else:
+                img = np.zeros_like(img)
 
             img, mask = self._resize_volume(img, mask)
 
             img_tensor = torch.from_numpy(img).unsqueeze(0)
             mask_tensor = torch.from_numpy(mask).unsqueeze(0)
 
-            return {'image': img_tensor, 'mask': mask_tensor, 'id': subject_id}
+            return {
+                'image': img_tensor,
+                'mask': mask_tensor,
+                'id': subject_id
+            }
 
         except Exception as e:
             print(f"Error loading {subject_id}: {e}")
