@@ -15,10 +15,12 @@ train:
   batch_size: 1
   accumulation_steps: 4
   learning_rate: 0.0001  # Matches your successful lower LR
-  epochs: 1500
+  epochs: 2500
   save_dir: 'C:\Users\Lab\OneDrive\Desktop\SPQA\logs\vae_checkpoints'
 
 phases:
+  # Smooth schedule: dice weight stays higher in late phases to prevent plateau
+  # Boundary/laplace capped to avoid overwhelming dice signal
   phase1_volume:
     threshold: 0.0
     dice: 8.0
@@ -28,41 +30,57 @@ phases:
     fix_weight: 0.125
 
   phase2_micro1:
-    threshold: 0.85
-    dice: 0.96
-    boundary: 0.128
+    threshold: 0.78
+    dice: 4.0
+    boundary: 0.25
     laplace: 0.1
+    pixel: 0.10
+    fix_weight: 0.10
+
+  phase2_micro2:
+    threshold: 0.83
+    dice: 2.0
+    boundary: 0.5
+    laplace: 0.2
     pixel: 0.05
     fix_weight: 0.05
 
-  phase2_micro2:
-    threshold: 0.875
+  phase3_micro1:
+    threshold: 0.87
     dice: 1.0
-    boundary: 0.68
-    laplace: 0.2
+    boundary: 1.0
+    laplace: 0.4
     pixel: 0.03
     fix_weight: 0.03
 
-  phase3_micro1:
-    threshold: 0.90
-    dice: 1.0
-    boundary: 0.96
-    laplace: 0.4
-    pixel: 0.01
-    fix_weight: 0.01
+  phase3_micro2:
+    threshold: 0.895
+    dice: 0.85
+    boundary: 1.5
+    laplace: 0.5
+    pixel: 0.03
+    fix_weight: 0.02
 
   phase4_micro1:
-    threshold: 0.925
-    dice: 0.5
-    boundary: 3.2
-    laplace: 1.28
-    pixel: 0.005
-    fix_weight: 0.005
+    threshold: 0.91
+    dice: 0.75
+    boundary: 1.8
+    laplace: 0.6
+    pixel: 0.03
+    fix_weight: 0.01
+
+  phase4_micro2:
+    threshold: 0.93
+    dice: 0.6
+    boundary: 2.0
+    laplace: 0.7
+    pixel: 0.025
+    fix_weight: 0.01
 
   phase5_ultra:
-    threshold: 0.95
-    dice: 0.2
-    boundary: 8.0
-    laplace: 4.0
-    pixel: 0.0
-    fix_weight: 0.0
+    threshold: 0.945
+    dice: 0.5
+    boundary: 2.2
+    laplace: 0.8
+    pixel: 0.02
+    fix_weight: 0.005

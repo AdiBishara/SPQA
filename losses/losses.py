@@ -43,7 +43,7 @@ class VAELoss(nn.Module):
         # Standard BCE used for intensity matching (Pixel Loss)
         self.bce = nn.BCEWithLogitsLoss()
 
-    def forward(self, recon_x, x, mu, logvar, corrupted_input=None, beta=None, calculate_boundary=False):
+    def forward(self, recon_x, x, mu, logvar, corrupted_input=None, beta=None):
         # 1. Probabilities for all Dice and Boundary calculations
         probs = torch.sigmoid(recon_x)
 
@@ -51,9 +51,9 @@ class VAELoss(nn.Module):
         d_acc = dice_coefficient(probs, x)
         d_loss = 1.0 - d_acc
 
-        # 3. Boundary Loss (SDM) - Critical for fine-tuning Stages 2-5
+        # 3. Boundary Loss (SDM) - Auto-enabled when boundary weight > 0
         boundary_l = torch.tensor(0.0, device=x.device)
-        if calculate_boundary:
+        if self.w.get('boundary', 0.0) > 0:
             with torch.no_grad():
                 dist_map = calc_dist_map_batch(x)
             boundary_l = torch.mean(probs * dist_map)
