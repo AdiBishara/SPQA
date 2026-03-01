@@ -30,6 +30,19 @@ def dice_coefficient(probs, target, smooth=1.0):
     intersection = (probs * target).sum()
     return (2. * intersection + smooth) / (probs.sum() + target.sum() + smooth)
 
+def tversky_index(probs, target, alpha=0.3, beta=0.7, smooth=1.0):
+    """Tversky index: alpha controls FP penalty, beta controls FN penalty.
+       beta > alpha = penalize missed regions (false negatives) more."""
+    tp = (probs * target).sum()
+    fp = (probs * (1 - target)).sum()
+    fn = ((1 - probs) * target).sum()
+    return (tp + smooth) / (tp + alpha * fp + beta * fn + smooth)
+
+def focal_tversky_loss(probs, target, alpha=0.3, beta=0.7, gamma=0.75):
+    """Focal Tversky Loss: gamma < 1 amplifies loss for hard examples."""
+    ti = tversky_index(probs, target, alpha, beta)
+    return torch.pow(1 - ti, gamma)
+
 # --- CORE LOSS CLASS ---
 class VAELoss(nn.Module):
     def __init__(self, config, kld_weight=0.005):
@@ -47,9 +60,10 @@ class VAELoss(nn.Module):
         # 1. Probabilities for all Dice and Boundary calculations
         probs = torch.sigmoid(recon_x)
 
-        # 2. Regional Dice Loss (Volume focus)
+        # 2. Regional Dice Loss (Volume focus) - monitoring only
         d_acc = dice_coefficient(probs, x)
-        d_loss = 1.0 - d_acc
+        # Focal Tversky: penalizes false negatives (missed brain) more heavily
+        d_loss = focal_tversky_loss(probs, x)
 
         # 3. Boundary Loss (SDM) - Auto-enabled when boundary weight > 0
         boundary_l = torch.tensor(0.0, device=x.device)
