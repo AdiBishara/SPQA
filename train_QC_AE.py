@@ -17,6 +17,29 @@ from utils.seeding import fix_seeds
 from utils.data.nifti_loader import NiftiDataset
 from utils.models.vae import VAE3D
 from losses.losses import VAELoss, dice_coefficient
+import torch.nn.functional as F
+
+
+def morphological_corrupt(mask):
+    """
+    Randomized Morphological Corruption (Erosion or Dilation).
+    - Erosion: negated 3D Max Pooling (shrinks the mask)
+    - Dilation: standard 3D Max Pooling (expands the mask)
+    - Severity: 1-5 random iterations
+    """
+    corr = mask.clone()
+    iterations = torch.randint(1, 6, (1,)).item()
+
+    if torch.rand(1).item() > 0.5:
+        # Dilation
+        for _ in range(iterations):
+            corr = F.max_pool3d(corr, kernel_size=3, stride=1, padding=1)
+    else:
+        # Erosion (negate -> max pool -> negate)
+        for _ in range(iterations):
+            corr = 1.0 - F.max_pool3d(1.0 - corr, kernel_size=3, stride=1, padding=1)
+
+    return corr
 
 # --- STABILITY CONSTANTS ---
 CONFIRM_EPOCHS = 5    # Consecutive epochs above threshold before advancing
@@ -200,7 +223,7 @@ def train_vae():
 
         for i, batch in enumerate(loader):
             img, mask = batch['image'].to(device), (batch['mask'].to(device) > 0.5).float()
-            sid = batch['id'][0]; corr = mask.clone() # Simple placeholder for discovery
+            sid = batch['id'][0]; corr = morphological_corrupt(mask)  # Randomized erosion/dilation
             with autocast('cuda'):
                 recon, mu, logvar = model(torch.cat([img, corr], dim=1))
                 d_acc = dice_coefficient(torch.sigmoid(recon), mask)
