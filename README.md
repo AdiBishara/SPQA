@@ -1,8 +1,6 @@
 # SPQA — Segmentation Pseudo-label Quality Assurance
 
-A deep learning framework for **automated quality control of brain segmentation pseudo-labels** using a 3D Variational Autoencoder (VAE). The core idea: a VAE trained to reconstruct *good* segmentation masks will disagree with *bad* ones — the reconstruction fidelity gap serves as a proxy quality score, without needing ground-truth labels at inference time.
-
-Built on [SynthStrip](https://surfer.nmr.mgh.harvard.edu/docs/synthstrip/) skull-stripping data.
+Deep learning framework for automated quality control of brain segmentation using a 3D Denoising Autoencoder (DAE). The DAE reconstructs clean masks from corrupted pseudo-labels; higher reconstruction errors indicate lower quality pseudo-labels. Built on [SynthStrip](https://surfer.nmr.mgh.harvard.edu/docs/synthstrip/).
 
 ---
 
@@ -10,10 +8,10 @@ Built on [SynthStrip](https://surfer.nmr.mgh.harvard.edu/docs/synthstrip/) skull
 
 | Component | Role | File |
 |---|---|---|
-| **VAE3D** | Reconstruction-based quality estimator (2-channel input: image + mask → 1-channel reconstructed mask) | `utils/models/vae.py` |
+| **DAE (via VAE3D)** | Reconstruction-based quality estimator (2-channel input: image + corrupted PL &rarr; 1-channel reconstruction) | `utils/models/vae.py` |
 | **U-Net** | Primary segmentation model (with MC-Dropout for uncertainty) | `utils/models/unet_dropout.py` |
-| **VAELoss** | Composite loss: Dice + Boundary (SDM) + Active Contour + Pixel BCE + Fixation + KLD | `losses/losses.py` |
-| **Phased Training** | Config-driven curriculum that shifts loss weights as Dice improves (volume → boundary focus) | `params/config.yaml` |
+| **DAELoss** | Composite loss: BCE (dynamic band) + Dice + Contour + KLD | `losses/losses.py` |
+| **Phased Training** | Config-driven curriculum that shifts loss weights as Dice improves (volume &rarr; boundary focus) | `params/config.yaml` |
 
 ## Project Structure
 
@@ -33,11 +31,11 @@ SPQA/
 │   ├── visualization.py         # Plotting utilities
 │   └── model_loader.py          # Model loading helpers
 ├── losses/
-│   └── losses.py                # VAELoss, Dice, Boundary, Active Contour
-├── train_QC_AE.py               # Train the VAE (quality control autoencoder)
+│   └── losses.py                # DAELoss, Dice, Boundary contour distances
+├── train_QC_AE.py               # Train the DAE (quality control autoencoder)
 ├── train_segmentation.py        # Train the U-Net segmentation model
 ├── run_QC.py                    # Evaluate U-Net segmentation (Dice, HD95, IoU)
-├── run_VAE_eval.py              # Evaluate VAE reconstruction quality
+├── run_VAE_eval.py              # Evaluate DAE reconstruction quality
 ├── validator.py                 # Cross-fold validation of VAE quality scores
 ├── hallucinations.py            # Anomaly detection test (synthetic artifact injection)
 ├── cp_selector.py               # Checkpoint comparison tool
@@ -65,7 +63,8 @@ Place [SynthStrip v1.5](https://surfer.nmr.mgh.harvard.edu/docs/synthstrip/) dat
 ```
 synthstrip_data_v1.5/<subject_id>/
 ├── image.nii.gz
-└── mask.nii.gz
+├── pseudo_label.nii.gz
+└── truth.nii.gz
 ```
 
 Update the `data.raw_data_root` path in `params/config.yaml` to point to your data directory.
@@ -120,10 +119,9 @@ python hallucinations.py
 All training hyperparameters are in `params/config.yaml`. Key sections:
 
 - **`model`** — Architecture settings (channels, latent dim, image size)
-- **`train`** — Learning rate, epochs, batch size
+- **`train`** — Learning rate, epochs, batch size, and `kld_weight` (which controls deterministic DAE vs probabilistic VAE)
 - **`phases`** — Loss weight curriculum (automatically transitions as Dice improves):
-  - `phase1_volume` (Dice < 0.85): Heavy Dice weight, no boundary
-  - `phase2–5`: Progressively shifts toward boundary loss and active contour
+  - Transitions blend `dice`, `contour`, `bce`, and `band_size` to progressively heavily penalize contour/boundary errors once volumetric overlap is achieved.
 
 ## License
 

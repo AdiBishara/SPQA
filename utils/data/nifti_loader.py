@@ -23,20 +23,22 @@ class NiftiDataset(Dataset):
         self.file_list = []
         for subject_id in self.ids:
             img_path = os.path.join(self.data_root, subject_id, "image.nii.gz")
-            mask_path = os.path.join(self.data_root, subject_id, "mask.nii.gz")
+            pl_path = os.path.join(self.data_root, subject_id, "pseudo_label.nii.gz")
+            truth_path = os.path.join(self.data_root, subject_id, "truth.nii.gz")
 
             if not os.path.exists(img_path):
                 img_path = img_path.replace(".nii.gz", ".nii")
-                mask_path = mask_path.replace(".nii.gz", ".nii")
+                pl_path = pl_path.replace(".nii.gz", ".nii")
+                truth_path = truth_path.replace(".nii.gz", ".nii")
 
-            self.file_list.append((img_path, mask_path, subject_id))
+            self.file_list.append((img_path, pl_path, truth_path, subject_id))
 
-        print(f"--- SPQA Breakout Loader (Foreground-Normalized) ---")
+        print(f"--- SPQA Breakout Loader (Foreground-Normalized | DAE Mode) ---")
 
     def __len__(self):
         return len(self.ids)
 
-    def _resize_volume(self, img, mask):
+    def _resize_volume(self, img, pl, gt):
         """Center crops or pads the volume to the target resolution."""
         d, h, w = img.shape
         td, th, tw = self.target_size
@@ -47,25 +49,39 @@ class NiftiDataset(Dataset):
             ph1, ph2 = pad_h // 2, pad_h - (pad_h // 2)
             pw1, pw2 = pad_w // 2, pad_w - (pad_w // 2)
             img = np.pad(img, ((pd1, pd2), (ph1, ph2), (pw1, pw2)), mode='constant')
-            mask = np.pad(mask, ((pd1, pd2), (ph1, ph2), (pw1, pw2)), mode='constant')
+            pl = np.pad(pl, ((pd1, pd2), (ph1, ph2), (pw1, pw2)), mode='constant')
+            gt = np.pad(gt, ((pd1, pd2), (ph1, ph2), (pw1, pw2)), mode='constant')
             d, h, w = img.shape
 
         if d > td or h > th or w > tw:
             z, y, x = (d - td) // 2, (h - th) // 2, (w - tw) // 2
             img = img[z:z + td, y:y + th, x:x + tw]
-            mask = mask[z:z + td, y:y + th, x:x + tw]
+            pl = pl[z:z + td, y:y + th, x:x + tw]
+            gt = gt[z:z + td, y:y + th, x:x + tw]
 
-        return img, mask
+        return img, pl, gt
 
     def __getitem__(self, idx):
-        img_path, mask_path, subject_id = self.file_list[idx]
+        img_path, pl_path, truth_path, subject_id = self.file_list[idx]
 
         try:
             img_obj = nib.load(img_path)
-            mask_obj = nib.load(mask_path)
-
+            
+            # Load PL (fallback to truth if PL is missing)
+            if os.path.exists(pl_path):
+                pl_obj = nib.load(pl_path)
+            else:
+                pl_obj = nib.load(truth_path)
+                
+            # Load GT (fallback to PL if GT is missing)
+            if os.path.exists(truth_path):
+                gt_obj = nib.load(truth_path)
+            else:
+                gt_obj = pl_obj
+                
             img = img_obj.get_fdata().astype(np.float32)
-            mask = (mask_obj.get_fdata() > 0.5).astype(np.float32)
+            pl = (pl_obj.get_fdata() > 0.5).astype(np.float32)
+            gt = (gt_obj.get_fdata() > 0.5).astype(np.float32)
 
             # --- BREAKOUT NORMALIZATION: FOREGROUND ONLY ---
             # Identify actual brain tissue (non-zero intensity)
@@ -88,14 +104,16 @@ class NiftiDataset(Dataset):
             else:
                 img = np.zeros_like(img)
 
-            img, mask = self._resize_volume(img, mask)
+            img, pl, gt = self._resize_volume(img, pl, gt)
 
             img_tensor = torch.from_numpy(img).unsqueeze(0)
-            mask_tensor = torch.from_numpy(mask).unsqueeze(0)
+            pl_tensor = torch.from_numpy(pl).unsqueeze(0)
+            gt_tensor = torch.from_numpy(gt).unsqueeze(0)
 
             return {
                 'image': img_tensor,
-                'mask': mask_tensor,
+                'pl': pl_tensor,
+                'gt': gt_tensor,
                 'id': subject_id
             }
 

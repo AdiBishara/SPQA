@@ -16,7 +16,7 @@ from utils.config import load_config
 from utils.seeding import fix_seeds
 from utils.data.nifti_loader import NiftiDataset
 from utils.models.vae import VAE3D
-from losses.losses import VAELoss, dice_coefficient
+from losses.losses import DAELoss, dice_coefficient
 import torch.nn.functional as F
 
 
@@ -26,6 +26,10 @@ def morphological_corrupt(mask):
     - Erosion: negated 3D Max Pooling (shrinks the mask)
     - Dilation: standard 3D Max Pooling (expands the mask)
     - Severity: 1-5 random iterations
+    
+    This ensures the model sees a *different* corrupted shape every epoch,
+    forcing it to learn how to recover the true high-frequency boundary details 
+    regardless of the specific noise pattern it receives.
     """
     corr = mask.clone()
     iterations = torch.randint(1, 6, (1,)).item()
@@ -164,23 +168,24 @@ class SequentialLogger(object):
     def write(self, message): self.terminal.write(message); self.log.write(message); self.log.flush()
     def flush(self): self.terminal.flush(); self.log.flush()
 
-def save_visual_check(recon, target, image, epoch, save_dir, sid):
+def save_visual_check(recon, corr, target, image, epoch, save_dir, sid):
     try:
         os.makedirs(save_dir, exist_ok=True)
         d = image.shape[2]
         slices = [int(d*0.25), int(d*0.5), int(d*0.75)]
         slice_names = ['Inferior', 'Central', 'Superior']
-        col_titles = ['MRI Scan', 'Ground Truth', 'VAE Prediction']
+        col_titles = ['Corrupted (Input)', 'Ground Truth', 'DAE Prediction']
 
         fig, axes = plt.subplots(3, 3, figsize=(15, 12))
-        fig.suptitle(f"VAE Visual Validation | Epoch {epoch} | Subject: {sid}", fontsize=16, fontweight='bold')
+        fig.suptitle(f"DAE Visual Validation | Epoch {epoch} | Subject: {sid}", fontsize=16, fontweight='bold')
 
         for i, (s_idx, s_name) in enumerate(zip(slices, slice_names)):
             img_s = image[0,0,s_idx].detach().cpu().numpy()
             gt_s = target[0,0,s_idx].detach().cpu().numpy()
+            corr_s = corr[0,0,s_idx].detach().cpu().numpy()
             pred_s = (torch.sigmoid(recon[0,0,s_idx]) > 0.5).detach().cpu().numpy()
 
-            axes[i,0].imshow(img_s, cmap='gray')
+            axes[i,0].imshow(img_s, cmap='gray'); axes[i,0].imshow(corr_s, cmap='autumn', alpha=0.3)
             axes[i,1].imshow(img_s, cmap='gray'); axes[i,1].imshow(gt_s, cmap='Greens', alpha=0.3)
             axes[i,2].imshow(img_s, cmap='gray'); axes[i,2].imshow(pred_s, cmap='Reds', alpha=0.3)
 
@@ -205,8 +210,7 @@ def train_vae():
     ckpt, start_epoch = find_latest_checkpoint(save_dir)
     if ckpt: model.load_state_dict(torch.load(ckpt, map_location=device))
     optimizer = optim.Adam(model.parameters(), lr=config['train']['learning_rate'])
-    criterion = VAELoss(config=config).to(device)
-    bce_stable = nn.BCEWithLogitsLoss(pos_weight=torch.tensor([5.0]).to(device))
+    criterion = DAELoss(config=config).to(device)
     scaler = GradScaler('cuda')
     loader = DataLoader(NiftiDataset(img_dir=config['data']['raw_data_root'], list_path=config['data']['training_ids'], image_size=config['model']['image_size']), batch_size=1, shuffle=True)
 
@@ -216,23 +220,24 @@ def train_vae():
     ema_initialized = False  # Bootstrap flag for first epoch
 
     for epoch in range(start_epoch, config['train']['epochs']):
-        model.train(); m = {'dice': 0, 'pxl': 0, 'bnd': 0, 'lap': 0, 'fix': 0, 'count': 0}
+        model.train(); m = {'dice': 0, 'bce': 0, 'contour': 0, 'kld': 0, 'count': 0}
 
         # Apply current (possibly blended) weights to the loss function
         criterion.w = phase_mgr.get_weights()
 
         for i, batch in enumerate(loader):
-            img, mask = batch['image'].to(device), (batch['mask'].to(device) > 0.5).float()
-            sid = batch['id'][0]; corr = morphological_corrupt(mask)  # Randomized erosion/dilation
+            img = batch['image'].to(device)
+            gt = (batch['gt'].to(device) > 0.5).float()
+            sid = batch['id'][0]; corr = morphological_corrupt(gt)  # Randomized erosion/dilation
             with autocast('cuda'):
                 recon, mu, logvar = model(torch.cat([img, corr], dim=1))
-                d_acc = dice_coefficient(torch.sigmoid(recon), mask)
+                d_acc = dice_coefficient(torch.sigmoid(recon), gt)
                 # Apply current phase weights
-                loss, _, bnd_val, lap_val, pxl_val, fix_val = criterion(recon, mask, mu, logvar, corrupted_input=corr)
+                loss, _, contour_val, bce_val, kld_val = criterion(recon, gt, mu, logvar)
             scaler.scale(loss).backward(); scaler.step(optimizer); scaler.update(); optimizer.zero_grad()
-            m['dice'] += d_acc.item(); m['pxl'] += pxl_val.item(); m['count'] += 1
-            m['bnd'] += bnd_val.item(); m['lap'] += lap_val.item(); m['fix'] += fix_val.item()
-            if i == 0 and (epoch + 1) % 10 == 0: save_visual_check(recon, mask, img, epoch+1, vis_dir, sid)
+            m['dice'] += d_acc.item(); m['bce'] += bce_val.item(); m['count'] += 1
+            m['contour'] += contour_val.item(); m['kld'] += kld_val.item()
+            if i == 0 and (epoch + 1) % 10 == 0: save_visual_check(recon, corr, gt, img, epoch+1, vis_dir, sid)
 
         # --- EMA rolling dice (Fix 3) ---
         epoch_dice = m['dice'] / m['count']
@@ -246,8 +251,8 @@ def train_vae():
         current_phase, phase_status = phase_mgr.step(ema_dice)
 
         n = m['count']
-        print(f"Epoch {epoch+1:03d} | {current_phase} | Dice: {epoch_dice:.4f} | EMA: {ema_dice:.4f} | Pxl: {m['pxl']/n:.4f}")
-        print(f"    > Breakdown: Bnd: {m['bnd']/n:.4f} | Lap: {m['lap']/n:.4f} | Fix: {m['fix']/n:.4f}")
+        print(f"Epoch {epoch+1:03d} | {current_phase} | Dice: {epoch_dice:.4f} | EMA: {ema_dice:.4f} | BCE: {m['bce']/n:.4f}")
+        print(f"    > Breakdown: Contour: {m['contour']/n:.4f} | KLD: {m['kld']/n:.4f}")
         if phase_status:
             print(phase_status)
         torch.save(model.state_dict(), os.path.join(save_dir, f"vae_epoch_{epoch+1}.pth"))
