@@ -69,8 +69,8 @@ def main():
     parser = argparse.ArgumentParser(description="SPQA Cross-Fold Validation")
     parser.add_argument("--checkpoint", type=str, default=None,
                         help="Path to VAE checkpoint (.pth). If not provided, uses default path.")
-    parser.add_argument("--latent-dim", type=int, default=4096,
-                        help="Latent dimension of the VAE model (default: 4096)")
+    parser.add_argument("--latent-dim", type=int, default=2048,
+                        help="Latent dimension of the VAE model (default: 2048)")
     args = parser.parse_args()
 
     # --- PATH CONFIGURATION (relative to project root) ---
@@ -131,7 +131,61 @@ def main():
                 ps_d = nib.load(p_path).get_fdata()
                 im_d = nib.load(i_path).get_fdata()
 
-                recon = reconstruct_model_predict(model, device, im_d, ps_d)
+                # --- 1. Breakout Normalization (Match Training) ---
+                img = im_d.astype(np.float32)
+                foreground_mask = img > 0
+                foreground_voxels = img[foreground_mask]
+
+                if len(foreground_voxels) > 0:
+                    mean, std = foreground_voxels.mean(), foreground_voxels.std()
+                    img = (img - mean) / (std + 1e-8)
+                    img = np.clip(img, -3.0, 3.0)
+                    img[~foreground_mask] = -3.0
+                    img = (img - img.min()) / (img.max() - img.min() + 1e-8)
+                else:
+                    img = np.zeros_like(img)
+
+                # --- 2. Resize/Pad to 256x256x256 (Match Training) ---
+                target_size = (256, 256, 256)
+                d, h, w = img.shape
+                td, th, tw = target_size
+
+                # Pad if smaller
+                pad_d, pad_h, pad_w = max(0, td - d), max(0, th - h), max(0, tw - w)
+                if pad_d > 0 or pad_h > 0 or pad_w > 0:
+                    pd1, pd2 = pad_d // 2, pad_d - (pad_d // 2)
+                    ph1, ph2 = pad_h // 2, pad_h - (pad_h // 2)
+                    pw1, pw2 = pad_w // 2, pad_w - (pad_w // 2)
+                    img = np.pad(img, ((pd1, pd2), (ph1, ph2), (pw1, pw2)), mode='constant')
+                    ps_d_padded = np.pad(ps_d, ((pd1, pd2), (ph1, ph2), (pw1, pw2)), mode='constant')
+                else:
+                    ps_d_padded = ps_d.copy()
+
+                # Crop if larger
+                d, h, w = img.shape
+                if d > td or h > th or w > tw:
+                    z, y, x = (d - td) // 2, (h - th) // 2, (w - tw) // 2
+                    img = img[z:z + td, y:y + th, x:x + tw]
+                    ps_d_padded = ps_d_padded[z:z + td, y:y + th, x:x + tw]
+
+                # --- 3. Model Inference (on padded/normalized data) ---
+                recon_padded = reconstruct_model_predict(model, device, img, ps_d_padded)
+
+                # --- 4. Unpad/Uncrop Reconstruction back to original shape ---
+                recon = np.zeros_like(ps_d)
+                od, oh, ow = ps_d.shape
+                
+                # Unpad
+                if pad_d > 0 or pad_h > 0 or pad_w > 0:
+                    recon = recon_padded[pd1:pd1+od, ph1:ph1+oh, pw1:pw1+ow]
+                # Uncrop
+                elif od > td or oh > th or ow > tw:
+                    z, y, x = (od - td) // 2, (oh - th) // 2, (ow - tw) // 2
+                    recon[z:z + td, y:y + th, x:x + tw] = recon_padded
+                else:
+                    recon = recon_padded
+
+                # --- 5. Calculate Metrics ---
                 act_d = dice_score(gt_d, ps_d)
                 est_d = dice_score(ps_d, recon)
 
@@ -207,6 +261,24 @@ def main():
             f"{np.mean(all_est):0.3f} +/- {np.std(all_est):0.3f}"
         )
         global_report.append("-" * 100)
+        global_report.append("")
+        
+        if g_r >= 0.7:
+            indication = "STRONG: Excellent generalization expected."
+        elif g_r >= 0.5:
+            indication = "MODERATE: Showing good structural trends."
+        elif g_r >= 0.3:
+            indication = "WEAK: Further tuning/torque required."
+        else:
+            indication = "POOR: Model isn't capturing variations well."
+            
+        global_report.append(f"Run Checked:      {os.path.basename(model_path)}")
+        global_report.append(f"Total Samples:    {len(df)}")
+        global_report.append(f"Pearson r:        {g_r:.4f}")
+        global_report.append(f"MAE:              {g_mae:.4f}")
+        global_report.append("-" * 50)
+        global_report.append(f"Indication:       {indication}")
+        global_report.append("=" * 50)
 
         summary_text = "\n".join(global_report)
         print("\n" + summary_text)
