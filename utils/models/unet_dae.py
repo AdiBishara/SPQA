@@ -24,7 +24,7 @@ class UNetDAE(nn.Module):
             num_res_units=2,
             kernel_size=3,
             norm="BATCH",
-            dropout=0.0 # No dropout needed for the pure Denoising AE step
+            dropout=0.0 
         )
 
     def forward(self, x):
