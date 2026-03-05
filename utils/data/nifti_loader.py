@@ -25,14 +25,11 @@ class NiftiDataset(Dataset):
             img_path = os.path.join(self.data_root, subject_id, "image.nii.gz")
             pl_path = os.path.join(self.data_root, subject_id, "pseudo_label.nii.gz")
             truth_path = os.path.join(self.data_root, subject_id, "truth.nii.gz")
-
             if not os.path.exists(img_path):
                 img_path = img_path.replace(".nii.gz", ".nii")
                 pl_path = pl_path.replace(".nii.gz", ".nii")
                 truth_path = truth_path.replace(".nii.gz", ".nii")
-
             self.file_list.append((img_path, pl_path, truth_path, subject_id))
-
         print(f"--- SPQA Breakout Loader (Foreground-Normalized | DAE Mode) ---")
 
     def __len__(self):
