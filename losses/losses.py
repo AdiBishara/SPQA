@@ -63,12 +63,8 @@ class DAELoss(nn.Module):
 
         # 2. BCE Loss (with Dynamic Band Size applied)
         band_size = self.w.get('band_size', 0)
-        
-        # CRITICAL FIX: BCEWithLogitsLoss MUST take the raw logits (recon_x), NOT probabilities.
         bce_raw = self.bce(recon_x, x)
-        
         if band_size > 0:
-            # Create a band mask: pixels where absolute distance to boundary <= band_size
             band_mask = (torch.abs(dist_map) <= band_size).float()
             if band_mask.sum() > 0:
                 bce_loss = (bce_raw * band_mask).sum() / band_mask.sum()
