@@ -2,8 +2,8 @@
 seed: 42
 
 data:
-  raw_data_root: 'C:\Users\Lab\OneDrive\Desktop\SPQA\synthstrip_data_v1.5'
-  training_ids: 'C:\Users\Lab\OneDrive\Desktop\SPQA\fold_4\training_ids.txt'
+  raw_data_root: 'C:\Users\Lab\OneDrive\Desktop\SPQA\folds\fold_4\pseudo_labels'
+  training_ids: 'C:\Users\Lab\OneDrive\Desktop\SPQA\folds\fold_4\fold_4\training_ids.txt'
 
 model:
   in_channels: 2
@@ -14,7 +14,7 @@ model:
 train:
   batch_size: 1
   accumulation_steps: 4
-  learning_rate: 0.0001  # Matches your successful lower LR
+  learning_rate: 0.001  # 10x boost - required for U-Net with Batch Norm skip connections
   epochs: 2500
   save_dir: 'C:\Users\Lab\OneDrive\Desktop\SPQA\logs\vae_checkpoints'
   kld_weight: 0.0 # Set >0.0 to make it probabilistic
@@ -26,7 +26,7 @@ phases:
     dice: 8.0
     contour: 0.0
     bce: 0.125
-    band_size: 5
+    band_size: 0
 
   phase2_micro1:
     threshold: 0.78
@@ -73,6 +73,6 @@ phases:
   phase5_ultra:
     threshold: 0.94
     dice: 1.5
-    contour: 1.2
+    contour: 0.7  # Reduced from 1.2 to prevent inward boundary shrinkage
     bce: 0.02
     band_size: 1

@@ -6,3 +6,15 @@ train_QC_GAN.py
 __pycache__/
 .idea/
 
+# Data directories
+fold_4/
+
+# Generated results
+results_plots/
+results_vae_test/
+
+# Scratch / backup files
+train_QC_AE_backup_pre_stability_fixes.py
+_report_text.txt
+check_fold_overlap.py
+

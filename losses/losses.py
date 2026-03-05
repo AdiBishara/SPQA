@@ -30,18 +30,9 @@ def dice_coefficient(probs, target, smooth=1.0):
     intersection = (probs * target).sum()
     return (2. * intersection + smooth) / (probs.sum() + target.sum() + smooth)
 
-def tversky_index(probs, target, alpha=0.3, beta=0.7, smooth=1.0):
-    """Tversky index: alpha controls FP penalty, beta controls FN penalty.
-       beta > alpha = penalize missed regions (false negatives) more."""
-    tp = (probs * target).sum()
-    fp = (probs * (1 - target)).sum()
-    fn = ((1 - probs) * target).sum()
-    return (tp + smooth) / (tp + alpha * fp + beta * fn + smooth)
-
-def focal_tversky_loss(probs, target, alpha=0.3, beta=0.7, gamma=0.75):
-    """Focal Tversky Loss: gamma < 1 amplifies loss for hard examples."""
-    ti = tversky_index(probs, target, alpha, beta)
-    return torch.pow(1 - ti, gamma)
+def dice_loss(probs, target, smooth=1.0):
+    """Standard Dice Loss computation (1 - Dice)."""
+    return 1.0 - dice_coefficient(probs, target, smooth)
 
 # --- CORE LOSS CLASS ---
 class DAELoss(nn.Module):
@@ -57,10 +48,13 @@ class DAELoss(nn.Module):
 
         # Standard BCE used for intensity matching
         # Reduction 'none' so we can apply the band mask manually
+        # PyTorch Autocast REQUIRES BCEWithLogitsLoss for float16 stability!
         self.bce = nn.BCEWithLogitsLoss(reduction='none')
 
     def forward(self, recon_x, x, mu, logvar):
         # x is the Ground Truth target
+        # recon_x contains RAW LOGITS. 
+        # We compute probs here strictly for Dice/Contour calculations:
         probs = torch.sigmoid(recon_x)
 
         # 1. SDM calculation (needed for Contour and Band Size)
@@ -69,6 +63,8 @@ class DAELoss(nn.Module):
 
         # 2. BCE Loss (with Dynamic Band Size applied)
         band_size = self.w.get('band_size', 0)
+        
+        # CRITICAL FIX: BCEWithLogitsLoss MUST take the raw logits (recon_x), NOT probabilities.
         bce_raw = self.bce(recon_x, x)
         
         if band_size > 0:
@@ -83,7 +79,7 @@ class DAELoss(nn.Module):
 
         # 3. Regional Dice Loss
         d_acc = dice_coefficient(probs, x)
-        d_loss = focal_tversky_loss(probs, x)
+        d_loss = dice_loss(probs, x)
 
         # 4. Contour Loss (SDM boundary overlap)
         contour_l = torch.tensor(0.0, device=x.device)

@@ -119,4 +119,6 @@ class NiftiDataset(Dataset):
 
         except Exception as e:
             print(f"Error loading {subject_id}: {e}")
+            if len(self.ids) == 1:
+                raise e # Throw error to explicitly show the missing paths to the user
             return self.__getitem__((idx + 1) % len(self.ids))

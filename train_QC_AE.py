@@ -15,7 +15,7 @@ import matplotlib.pyplot as plt
 from utils.config import load_config
 from utils.seeding import fix_seeds
 from utils.data.nifti_loader import NiftiDataset
-from utils.models.vae import VAE3D
+from utils.models.unet_dae import UNetDAE
 from losses.losses import DAELoss, dice_coefficient
 import torch.nn.functional as F
 
@@ -159,46 +159,105 @@ def find_latest_checkpoint(save_dir):
     return latest, extract_epoch(latest)
 
 class SequentialLogger(object):
+    """
+    Logs all training stdout to a numbered file in log_dir.
+    Detects the current max run number from existing files and continues from it.
+    """
     def __init__(self, log_dir):
         os.makedirs(log_dir, exist_ok=True)
         self.terminal = sys.stdout
-        num = len(glob.glob(os.path.join(log_dir, "vae_run_*.txt"))) + 1
-        self.log = open(os.path.join(log_dir, f"vae_run_{num}.txt"), "a", encoding="utf-8")
-        print(f"--- RUN 28 RECONSTRUCTION SESSION {num} ---")
-    def write(self, message): self.terminal.write(message); self.log.write(message); self.log.flush()
-    def flush(self): self.terminal.flush(); self.log.flush()
+
+        # Find the highest existing run number and continue from it
+        existing = glob.glob(os.path.join(log_dir, "vae_run_*.txt"))
+        if existing:
+            nums = []
+            for f in existing:
+                m = re.search(r'vae_run_(\d+)\.txt', f)
+                if m: nums.append(int(m.group(1)))
+            num = max(nums) + 1 if nums else 1
+        else:
+            num = 1
+
+        self.log_path = os.path.join(log_dir, f"vae_run_{num}.txt")
+        self.log = open(self.log_path, "a", encoding="utf-8")
+        # Write banner to both console and file
+        banner = f"--- SPQA DAE TRAINING SESSION {num} ---\n"
+        self.terminal.write(banner)
+        self.terminal.flush()
+        self.log.write(banner)
+        self.log.flush()
+
+    def write(self, message):
+        self.terminal.write(message)
+        self.terminal.flush()
+        self.log.write(message)
+        self.log.flush()
+
+    def flush(self):
+        self.terminal.flush()
+        self.log.flush()
+
 
 def save_visual_check(recon, corr, target, image, epoch, save_dir, sid):
+    """
+    Saves a 3x4 grid visualization:
+      Col 0: MRI + Corrupted Mask (yellow) - what the model receives
+      Col 1: MRI + Ground Truth (green)    - the target
+      Col 2: MRI + DAE Prediction (red)    - the model's output
+      Col 3: Difference Heatmap (hot)      - GT minus Corrupted (what the model must repair)
+    """
     try:
         os.makedirs(save_dir, exist_ok=True)
         d = image.shape[2]
         slices = [int(d*0.25), int(d*0.5), int(d*0.75)]
         slice_names = ['Inferior', 'Central', 'Superior']
-        col_titles = ['Corrupted (Input)', 'Ground Truth', 'DAE Prediction']
+        col_titles = ['Corrupted Input', 'Ground Truth', 'DAE Prediction', 'GT − Corrupted\n(repair task)']
 
-        fig, axes = plt.subplots(3, 3, figsize=(15, 12))
-        fig.suptitle(f"DAE Visual Validation | Epoch {epoch} | Subject: {sid}", fontsize=16, fontweight='bold')
+        fig, axes = plt.subplots(3, 4, figsize=(20, 12))
+        fig.suptitle(f"DAE Visual Validation | Epoch {epoch:04d} | Subject: {sid}", fontsize=16, fontweight='bold')
 
         for i, (s_idx, s_name) in enumerate(zip(slices, slice_names)):
             img_s = image[0,0,s_idx].detach().cpu().numpy()
-            gt_s = target[0,0,s_idx].detach().cpu().numpy()
-            corr_s = corr[0,0,s_idx].detach().cpu().numpy()
-            pred_s = (torch.sigmoid(recon[0,0,s_idx]) > 0.5).detach().cpu().numpy()
+            corr_np = corr[0,0,s_idx].detach().cpu().numpy()
+            tgt_np = target[0,0,s_idx].detach().cpu().numpy()
+            pred_prob = torch.sigmoid(recon[0,0,s_idx]).detach().cpu().numpy()
+            pred_mask = (pred_prob > 0.40).astype(np.float32)
 
-            axes[i,0].imshow(img_s, cmap='gray'); axes[i,0].imshow(corr_s, cmap='autumn', alpha=0.3)
-            axes[i,1].imshow(img_s, cmap='gray'); axes[i,1].imshow(gt_s, cmap='Greens', alpha=0.3)
-            axes[i,2].imshow(img_s, cmap='gray'); axes[i,2].imshow(pred_s, cmap='Reds', alpha=0.3)
+            # Col 0: Corrupted Input
+            axes[i,0].imshow(img_s, cmap='gray')
+            if np.any(corr_np):
+                axes[i,0].imshow(np.ma.masked_where(corr_np < 0.5, corr_np), cmap='autumn', alpha=0.50, vmin=0, vmax=1, interpolation='nearest')
 
-            # Row labels with slice name and index
-            axes[i,0].set_title(f"{s_name} Slice ({s_idx}) - {col_titles[0]}", fontsize=10)
-            axes[i,1].set_title(col_titles[1], fontsize=10)
-            axes[i,2].set_title(col_titles[2], fontsize=10)
+            # Col 1: Ground Truth
+            axes[i,1].imshow(img_s, cmap='gray')
+            if np.any(tgt_np):
+                axes[i,1].imshow(np.ma.masked_where(tgt_np < 0.5, tgt_np), cmap='Greens', alpha=0.50, vmin=0, vmax=1, interpolation='nearest')
+
+            # Col 2: DAE Prediction
+            axes[i,2].imshow(img_s, cmap='gray')
+            if np.any(pred_mask):
+                axes[i,2].imshow(np.ma.masked_where(pred_mask < 0.5, pred_mask), cmap='Reds', alpha=0.50, vmin=0, vmax=1, interpolation='nearest')
+
+            # Col 3: Difference Heatmap (GT - Corrupted) — shows what the model must repair
+            # +1 = regions in GT but not in corrupted (erosion damage / missing voxels)
+            # -1 = regions in corrupted but not in GT (dilation artifacts / extra voxels)
+            diff = tgt_np - corr_np
+            axes[i,3].imshow(img_s, cmap='gray')
+            axes[i,3].imshow(diff, cmap='RdBu', alpha=0.65, vmin=-1, vmax=1, interpolation='nearest')
+
+            # Titles and row labels
+            axes[i,0].set_title(f"{s_name} ({s_idx}) | {col_titles[0]}", fontsize=9)
+            axes[i,1].set_title(col_titles[1], fontsize=9)
+            axes[i,2].set_title(col_titles[2], fontsize=9)
+            axes[i,3].set_title(col_titles[3], fontsize=9)
 
             for ax in axes[i]: ax.axis('off')
 
         plt.tight_layout()
-        plt.savefig(os.path.join(save_dir, f"epoch_{epoch:03d}_{sid}.png"), dpi=150); plt.close(fig)
-    except Exception as e: print(f"Visual Error: {e}")
+        plt.savefig(os.path.join(save_dir, f"epoch_{epoch:04d}_{sid}.png"), dpi=150)
+        plt.close(fig)
+    except Exception as e:
+        print(f"Visual Error: {e}")
 
 def train_vae():
     config = load_config(r"C:\Users\Lab\OneDrive\Desktop\SPQA\params\config.yaml")
@@ -206,9 +265,15 @@ def train_vae():
     log_dir, save_dir, vis_dir = [os.path.join(r"C:\Users\Lab\OneDrive\Desktop\SPQA\logs", d) for d in ["training_logs", "vae_checkpoints", "visual_progress"]]
     for d in [log_dir, save_dir, vis_dir]: os.makedirs(d, exist_ok=True)
     sys.stdout = SequentialLogger(log_dir)
-    model = VAE3D(in_channels=2, out_channels=1, latent_dim=config['model']['latent_dim']).to(device)
+    model = UNetDAE(in_channels=2, out_channels=1, spatial_dims=3).to(device)
     ckpt, start_epoch = find_latest_checkpoint(save_dir)
-    if ckpt: model.load_state_dict(torch.load(ckpt, map_location=device))
+    if ckpt: 
+        try:
+            model.load_state_dict(torch.load(ckpt, map_location=device), strict=False)
+            print(f"Loaded checkpoint: {ckpt} (strict=False)")
+        except Exception as e:
+            print(f"Warning: Failed to load checkpoint {ckpt}. Starting from scratch. Error: {e}")
+            start_epoch = 0
     optimizer = optim.Adam(model.parameters(), lr=config['train']['learning_rate'])
     criterion = DAELoss(config=config).to(device)
     scaler = GradScaler('cuda')
