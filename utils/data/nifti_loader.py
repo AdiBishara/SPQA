@@ -81,22 +81,16 @@ class NiftiDataset(Dataset):
             gt = (gt_obj.get_fdata() > 0.5).astype(np.float32)
 
             # --- BREAKOUT NORMALIZATION: FOREGROUND ONLY ---
-            # Identify actual brain tissue (non-zero intensity)
+            # Identifies brain tissue, applies Z-score normalization strictly to foreground,
+            # clips outliers (-3 to +3 SD), suppresses background noise, and scales to [0, 1].
             foreground_mask = img > 0
             foreground_voxels = img[foreground_mask]
 
             if len(foreground_voxels) > 0:
-                # 1. Z-Score using ONLY tissue stats to ignore 'air' noise
                 mean, std = foreground_voxels.mean(), foreground_voxels.std()
                 img = (img - mean) / (std + 1e-8)
-
-                # 2. Hard-Clip anatomical range (-3 to +3 SD)
                 img = np.clip(img, -3.0, 3.0)
-
-                # 3. Background Suppression: Set all air/noise to the floor
                 img[~foreground_mask] = -3.0
-
-                # 4. Final Min-Max scale to [0, 1]
                 img = (img - img.min()) / (img.max() - img.min() + 1e-8)
             else:
                 img = np.zeros_like(img)

@@ -31,9 +31,7 @@ def find_model_file(directory):
 
 
 def load_unet_model(model_details):
-    """
-    Load a single UNet model with FORCED Stride 1 settings.
-    """
+    """Loads a UNet model with forced Stride 1 settings."""
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     print(f"\n--- LOADING UNET ---")

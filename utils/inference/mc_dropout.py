@@ -3,17 +3,10 @@ import torch.nn as nn
 
 
 def monte_carlo_dropout_predict(model, inputs, num_samples=10):
-    """
-    Performs Monte Carlo Dropout inference.
-    Returns:
-        predictions_stack: (Batch, Samples, Channels, H, W)
-        predictions_mean:  (Batch, Channels, H, W)
-    """
-    # 1. Set model to eval mode (freezes BatchNorm statistics)
-    model.eval()
+    """Performs Monte Carlo Dropout inference, returning prediction stack and mean expected prediction."""
+    model.eval() # Freeze BatchNorm stats
 
-    # 2. Force Dropout layers to Train mode
-    # FIX: Use isinstance to catch Dropout2d (which UNets use)
+    # Force Dropout layers to Train mode (including 2D/3D variants)
     def enable_dropout(m):
         if isinstance(m, (nn.Dropout, nn.Dropout2d, nn.Dropout3d)):
             m.train()
@@ -28,9 +21,7 @@ def monte_carlo_dropout_predict(model, inputs, num_samples=10):
             output = torch.sigmoid(model(inputs))
             predictions.append(output)
 
-    # 3. Stack predictions
-    # FIX: Stack on dim=1 to get (Batch, Samples, Channel, H, W)
-    # This ensures torch.var(dim=1) in evaluation.py works correctly.
+    # Stack on dim=1: (Batch, Samples, Channel, H, W) for variance calculation
     predictions_stack = torch.stack(predictions, dim=1)
 
     # 4. Calculate Mean (Expected Prediction)

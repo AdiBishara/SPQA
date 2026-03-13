@@ -2,7 +2,7 @@ import torch
 import torchvision.transforms.functional as TF
 
 def get_tta_transforms():
-    # Defines simple geometric transformations for TTA
+    """Defines simple geometric transformations for Test-Time Augmentation."""
     return ['identity', 'horizontal_flip', 'vertical_flip', 'rotate_90', 'rotate_180']
 
 

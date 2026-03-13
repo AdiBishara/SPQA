@@ -24,7 +24,7 @@ class UNet(nn.Module):
             kernel_size=3
         )
 
-        # Force Dropout (Critical for Uncertainty Estimation / QC)
+        # Enforce dropout across all layers for Monte Carlo uncertainty estimation.
         if dropout > 0.0:
             for module in self.model.modules():
                 if isinstance(module, (nn.Dropout, nn.Dropout2d, nn.Dropout3d)):

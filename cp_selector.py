@@ -105,16 +105,13 @@ def compare_results():
         print("Could not load data. Check paths.")
         return
 
-    # 2. Corrupt the mask slightly (Simulate Training Conditions)
-    # We flip 10% of pixels to see if the model fixes it
+    # 2. Corrupt the mask slightly (Simulate Training Conditions: flip 10% of pixels)
     noisy_mask = mask_slice.copy()
     noise = np.random.random(noisy_mask.shape)
     mask_indices = noise < 0.1  # 10% noise
     noisy_mask[mask_indices] = 1 - noisy_mask[mask_indices]
 
-    # 3. Create Input Tensor: [1, 2, 512, 512]
-    # Channel 0: Image
-    # Channel 1: Noisy Mask
+    # 3. Create Input Tensor: [1, 2, 512, 512] (CH0: Image, CH1: Corrupt Mask)
     t_img = torch.from_numpy(img_slice).float().unsqueeze(0).unsqueeze(0)
     t_mask = torch.from_numpy(noisy_mask).float().unsqueeze(0).unsqueeze(0)
 

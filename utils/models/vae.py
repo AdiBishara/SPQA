@@ -3,9 +3,7 @@ import torch.nn as nn
 
 
 class UpsampleBlock(nn.Module):
-    """
-    Replaces ConvTranspose with Upsample + Conv to eliminate checkerboard artifacts.
-    """
+    """Uses Upsample + Conv to eliminate checkerboard artifacts seen in ConvTranspose."""
 
     def __init__(self, in_ch, out_ch):
         super(UpsampleBlock, self).__init__()
@@ -65,24 +63,17 @@ class VAE3D(nn.Module):
             nn.GroupNorm(8, 256), nn.LeakyReLU(0.2), ResidualBlock3D(256)
         )
 
-        # --- BOTTLENECK ---
-        self.pool = nn.AdaptiveAvgPool3d(1)
-        self.fc_mu = nn.Linear(256, latent_dim)
-        self.fc_logvar = nn.Linear(256, latent_dim)
+        # --- SPATIAL BOTTLENECK ---
+        # Maps 256-channel output directly to a 16-channel 3D Latent Space to preserve spatial geometry.
+        self.latent_channels = 16
+        self.conv_mu = nn.Conv3d(256, self.latent_channels, kernel_size=3, padding=1)
+        self.conv_logvar = nn.Conv3d(256, self.latent_channels, kernel_size=3, padding=1)
 
-        # --- DENSE SPATIAL PROJECTOR (The Fix) ---
-        # Instead of broadcasting, we project directly to a 4x4x4 volume with 128 channels
-        # This gives the model a "Chunk of Clay" that already has shape info
-        self.spatial_base_dim = 4
-        self.spatial_base_ch = 128
-        self.decoder_projection = nn.Linear(
-            latent_dim,
-            self.spatial_base_ch * self.spatial_base_dim ** 3
-        )
+        # --- DECODER PROJECTION ---
+        # Translates 16 latent channels back to 128 base channels for decoding.
+        self.decoder_projection = nn.Conv3d(self.latent_channels, 128, kernel_size=3, padding=1)
 
         # --- DECODER (Upsample-based) ---
-        # We need 6 upsamples to go from 4x4x4 -> 256x256x256
-        self.dec6 = UpsampleBlock(128, 128)  # 4 -> 8
         self.dec5 = UpsampleBlock(128, 64)  # 8 -> 16
         self.dec4 = UpsampleBlock(64, 64)  # 16 -> 32
         self.dec3 = UpsampleBlock(64, 32)  # 32 -> 64
@@ -97,7 +88,8 @@ class VAE3D(nn.Module):
             nn.init.orthogonal_(m.weight)
 
     def reparameterize(self, mu, logvar):
-        std = torch.exp(0.5 * logvar)
+        # Add epsilon to prevent 0 std, clamp exp to purely finite range
+        std = torch.exp(0.5 * logvar.clamp(min=-20, max=10)) + 1e-8
         return mu + torch.randn_like(std) * std
 
     def forward(self, x):
@@ -111,22 +103,17 @@ class VAE3D(nn.Module):
         x4 = self.enc4(x3)
         x5 = self.enc5(x4)
 
-        # Bottleneck
-        pooled = self.pool(x5).view(x5.shape[0], -1)
-        mu = self.fc_mu(pooled)
-        logvar = torch.clamp(self.fc_logvar(pooled), -10, 10)
+        # --- SPATIAL BOTTLENECK ---
+        x5_f32 = x5.to(torch.float32) # Force f32 for stable KLD
+        mu = self.conv_mu(x5_f32)
+        logvar = torch.clamp(self.conv_logvar(x5_f32), min=-20, max=10) # Prevent -inf crash
         z = self.reparameterize(mu, logvar)
 
-        # Decode (Dense Projection)
-        # 1. Project latent vector to a massive flat vector
-        z_spatial = self.decoder_projection(z)
-        # 2. Reshape into a 3D volume (Batch, 128, 4, 4, 4)
-        z_vol = z_spatial.view(-1, self.spatial_base_ch, self.spatial_base_dim, self.spatial_base_dim,
-                               self.spatial_base_dim)
+        # --- DECODE ---
+        z_vol = self.decoder_projection(z).to(x5.dtype)
 
-        # 3. Upsample path
-        d6 = self.dec6(z_vol)  # -> 8
-        d5 = self.dec5(d6)  # -> 16
+        # 5-Step Upsample
+        d5 = self.dec5(z_vol)  # -> 16
         d4 = self.dec4(d5)  # -> 32
         d3 = self.dec3(d4)  # -> 64
         d2 = self.dec2(d3)  # -> 128

@@ -20,9 +20,7 @@ def dice_coeff_metric(pred, target):
 
 
 def compute_uncertainty_map(predictions: torch.Tensor):
-    """Calculates pixel-wise uncertainty (Variance)."""
-    # predictions: (Batch, Samples, Channels, H, W)
-    # Variance across dim=1 (Samples)
+    """Calculates pixel-wise uncertainty (variance across sample dimension)."""
     return torch.var(predictions, dim=1)
 
 
@@ -31,7 +29,7 @@ def compute_uncertainty_scalar(uncertainty_map: torch.Tensor):
 
 
 def force_dropout_on(model):
-    """Finds all dropout layers and forces them to TRAIN mode."""
+    """Forces all dropout layers into train mode for MC sampling."""
     count = 0
     for m in model.modules():
         if isinstance(m, (torch.nn.Dropout, torch.nn.Dropout2d, torch.nn.Dropout3d)):
@@ -105,8 +103,7 @@ def compute_predictions_and_metrics(
         model_dae: Optional[torch.nn.Module] = None,
         model_dae_adv: Optional[torch.nn.Module] = None
 ) -> pd.DataFrame:
-    # 1. Start with Eval (locks BatchNorm)
-    model.eval()
+    model.eval() # Start in Eval to lock BatchNorm
     if model_dae: model_dae.eval()
     if model_dae_adv: model_dae_adv.eval()
 
@@ -127,12 +124,10 @@ def compute_predictions_and_metrics(
         # --- MC DROPOUT INFERENCE ---
         if method == "mc_dropout":
 
-            # A. FORCE DROPOUT ON
             active_layers = force_dropout_on(model)
 
-            # B. PARANOID CHECK (Print status once)
             if not debug_printed:
-                # Grab the first dropout layer to verify
+                # Verify dropout state explicitly on first run
                 for m in model.modules():
                     if isinstance(m, (torch.nn.Dropout, torch.nn.Dropout2d)):
                         print(f"DEBUG CHECK: Dropout Layer Mode is TRAIN? -> {m.training}")

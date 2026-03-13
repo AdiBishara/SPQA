@@ -6,8 +6,7 @@ from scipy.ndimage import distance_transform_edt as distance
 
 # --- HELPER FUNCTIONS ---
 def get_3d_active_contour_length(probs):
-    """Calculates the length of the active contour in 3D for boundary regularization."""
-    # Added epsilon inside sqrt for stability
+    """Calculates 3D active contour length for boundary regularization."""
     dx = torch.pow(probs[:, :, 1:, :-1, :-1] - probs[:, :, :-1, :-1, :-1], 2)
     dy = torch.pow(probs[:, :, :-1, 1:, :-1] - probs[:, :, :-1, :-1, :-1], 2)
     dz = torch.pow(probs[:, :, :-1, :-1, 1:] - probs[:, :, :-1, :-1, :-1], 2)
@@ -46,15 +45,13 @@ class DAELoss(nn.Module):
         initial_phase = config['phases']['phase1_volume']
         self.w = {k: v for k, v in initial_phase.items() if k != 'threshold'}
 
-        # Standard BCE used for intensity matching
-        # Reduction 'none' so we can apply the band mask manually
-        # PyTorch Autocast REQUIRES BCEWithLogitsLoss for float16 stability!
+        # BCE with 'none' reduction allows manual band masking.
+        # BCEWithLogitsLoss is required for PyTorch Autocast float16 stability.
         self.bce = nn.BCEWithLogitsLoss(reduction='none')
 
     def forward(self, recon_x, x, mu, logvar):
-        # x is the Ground Truth target
-        # recon_x contains RAW LOGITS. 
-        # We compute probs here strictly for Dice/Contour calculations:
+        # x is Ground Truth; recon_x contains raw logits.
+        # Compute probs strictly for Dice/Contour metrics:
         probs = torch.sigmoid(recon_x)
 
         # 1. SDM calculation (needed for Contour and Band Size)
@@ -77,24 +74,46 @@ class DAELoss(nn.Module):
         d_acc = dice_coefficient(probs, x)
         d_loss = dice_loss(probs, x)
 
-        # 4. Contour Loss (SDM boundary overlap)
+        # 4. Contour Loss (Boundary Confidence)
+        # Regional Dice localized to the boundary to explicitly reward precise edge matching.
         contour_l = torch.tensor(0.0, device=x.device)
         if self.w.get('contour', 0.0) > 0:
-            contour_l = torch.mean(probs * dist_map)
+            # Isolate the literal 3D boundary of the Ground Truth mask (where SDM is between -2 and 2)
+            boundary_mask = (torch.abs(dist_map) <= 2.0).float()
+            
+            if boundary_mask.sum() > 0:
+                b_probs = probs * boundary_mask
+                b_target = x * boundary_mask
+                
+                # Localized Boundary Dice Loss
+                intersection = (b_probs * b_target).sum()
+                contour_l = 1.0 - (2. * intersection + 1.0) / (b_probs.sum() + b_target.sum() + 1.0)
 
         # 5. Composite Reconstruction Loss
         recon_total = (self.w.get('bce', 0.125) * bce_loss) + \
                       (self.w.get('dice', 8.0) * d_loss) + \
                       (self.w.get('contour', 0.0) * contour_l)
 
-        # 6. Optional KLD (if kld_weight > 0.0, acts as Variational DAE)
+        # 6. Optional KLD (if kld > 0.0, acts as Variational DAE)
         kld_l = torch.tensor(0.0, device=x.device)
-        if self.kld_weight > 0.0 and mu is not None and logvar is not None:
-            kld_l = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), dim=1).mean()
-            total = recon_total + (self.kld_weight * (kld_l / mu.shape[1]))
+        current_kld_weight = self.w.get('kld', self.kld_weight)
+        
+        if current_kld_weight > 0.0 and mu is not None and logvar is not None:
+            # Force float32 to prevent float16 KLD exponentiation overflow
+            mu_f32 = mu.to(torch.float32)
+            logvar_f32 = logvar.to(torch.float32)
+            
+            # Flatten spatial dims to dynamically support any bottleneck shape (1D/2D/3D)
+            mu_flat = mu_f32.view(mu_f32.size(0), -1)
+            logvar_flat = logvar_f32.view(logvar_f32.size(0), -1)
+            
+            # KLD = -0.5 * sum(1 + log(var) - mu^2 - var); sum over latents, average over batch
+            kld_raw = -0.5 * torch.sum(1 + logvar_flat - mu_flat.pow(2) - logvar_flat.exp(), dim=1).mean()
+            kld_l = kld_raw.to(x.dtype)
+            
+            total = recon_total + (current_kld_weight * (kld_l / mu_flat.shape[1]))
         else:
             total = recon_total
 
-        # --- MATCHING THE TRAINER RETURN SIGNATURE ---
-        # Returns Total, Dice Acc, Contour Loss, BCE Loss, KLD Loss
+        # Returns: Total Loss, Dice Acc, Contour Loss, BCE Loss, KLD Loss
         return total, d_acc, contour_l, bce_loss, kld_l

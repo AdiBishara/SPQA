@@ -20,72 +20,70 @@ from losses.losses import DAELoss, dice_coefficient
 import torch.nn.functional as F
 
 
-def morphological_corrupt(mask, epoch=0, total_epochs=2500):
-    """
-    Curriculum Corruption: starts mild, ramps to severe over training.
+# --- Data Augmentation & Corruption ---
 
-    Stage 1 - Morphological (always applied):
-      - Erosion: negated 3D Max Pooling (shrinks the mask)
-      - Dilation: standard 3D Max Pooling (expands the mask)
-      - Iterations ramp from 1-2 early to 1-5 late
-
-    Stage 2 - Slab Masking (probability ramps with epoch):
-      - Removes a contiguous slab along a random axis
-      - Removal fraction ramps from 20-30% early to 20-80% late
-      - Directly targets the extreme-corruption failure cases seen in fold_1
-    """
-    # Curriculum severity: 0.0 at epoch 0 -> 1.0 at 60% of training
-    severity = min(epoch / max(total_epochs * 0.6, 1), 1.0)
-
+def morphological_corrupt(mask, severity=0.0):
+    """Dynamically scales morphological degradation and slab masking based on training phase severity."""
     corr = mask.clone()
 
     # --- Stage 1: Morphological corruption ---
-    max_iters = 2 + int(severity * 3)  # ramps: 2 early -> 5 late
+    # As severity increases, we apply more iterations (from 1 up to 5)
+    max_iters = 1 + int(severity * 4)  
     iterations = torch.randint(1, max_iters + 1, (1,)).item()
+    
+    # We randomly choose to either erode or dilate the mask, modifying the boundary
     if torch.rand(1).item() > 0.5:
+        # Erosion (shrinks the shape)
         for _ in range(iterations):
             corr = F.max_pool3d(corr, kernel_size=3, stride=1, padding=1)
     else:
+        # Dilation (expands the shape)
         for _ in range(iterations):
             corr = 1.0 - F.max_pool3d(1.0 - corr, kernel_size=3, stride=1, padding=1)
 
-    # --- Stage 2: Slab masking (probability ramps with severity) ---
-    slab_prob = severity * 0.65  # 0% early -> ~65% probability at max severity
-    if torch.rand(1).item() < slab_prob:
-        axis = torch.randint(2, 5, (1,)).item()  # 2=D, 3=H, 4=W
-        max_removal = 0.30 + severity * 0.50    # ramps: 30% early -> 80% late
-        removal_frac = torch.FloatTensor(1).uniform_(0.20, max_removal).item()
-        size = corr.shape[axis]
-        n_remove = max(1, int(size * removal_frac))
-        start = torch.randint(0, max(1, size - n_remove + 1), (1,)).item()
-        slices = [slice(None)] * 5
-        slices[axis] = slice(start, start + n_remove)
-        corr[tuple(slices)] = 0.0
+    # --- Stage 2: Slab masking ---
+    # We only start aggressively removing entire chunks (slabs) after the grace period.
+    if severity > 0.0:
+        # The likelihood of destroying a slab increases as severity goes up
+        slab_prob = severity * 0.65
+        if torch.rand(1).item() < slab_prob:
+            # Pick a random spatial axis (2=Depth, 3=Height, 4=Width)
+            axis = torch.randint(2, 5, (1,)).item()
+            
+            # Decide how much of the volume to remove (up to 80% at max severity)
+            max_removal = 0.20 + severity * 0.60
+            removal_frac = torch.FloatTensor(1).uniform_(0.15, max_removal).item()
+            
+            size = corr.shape[axis]
+            n_remove = max(1, int(size * removal_frac))
+            
+            # Find a random starting position for our removal "cut"
+            start = torch.randint(0, max(1, size - n_remove + 1), (1,)).item()
+            
+            # Build the slicing dynamically and apply it
+            slices = [slice(None)] * 5
+            slices[axis] = slice(start, start + n_remove)
+            corr[tuple(slices)] = 0.0
 
     return corr
 
 
 def augment_3d(image, mask):
-    """
-    Paper-aligned 3D spatial augmentations applied consistently to image and mask.
-    - Random flipping along each spatial axis (50% chance each)
-    - Random rotation: -30 to +30 degrees around each axis
-    - Random scaling: 0.7 to 1.4
-    - Random center shift: +/-10% of volume size
-    """
+    """Applies consistent 3D spatial augmentations (flips, affine transformations) to image and mask."""
     # --- 1. Random Flipping ---
-    for dim in [2, 3, 4]:  # D, H, W
+    # We iterate over Depth, Height, and Width
+    for dim in [2, 3, 4]:
         if torch.rand(1).item() > 0.5:
             image = torch.flip(image, [dim])
             mask = torch.flip(mask, [dim])
 
-    # --- 2. Random Affine (rotation + scale + shift) ---
-    # Random angles in radians
+    # --- 2. Random Affine (Rotation + Scale + Offset) ---
+    # Pick random angles in radians
     ax = torch.FloatTensor(1).uniform_(-30, 30).item() * (np.pi / 180)
     ay = torch.FloatTensor(1).uniform_(-30, 30).item() * (np.pi / 180)
     az = torch.FloatTensor(1).uniform_(-30, 30).item() * (np.pi / 180)
 
-    # Rotation matrices for each axis
+    # Build the rotation matrices for X, Y, and Z
     cx, sx = np.cos(ax), np.sin(ax)
     cy, sy = np.cos(ay), np.sin(ay)
     cz, sz = np.cos(az), np.sin(az)
@@ -94,105 +92,105 @@ def augment_3d(image, mask):
     Ry = torch.tensor([[cy, 0, sy], [0, 1, 0], [-sy, 0, cy]], dtype=torch.float32)
     Rz = torch.tensor([[cz, -sz, 0], [sz, cz, 0], [0, 0, 1]], dtype=torch.float32)
 
-    # Combined rotation + scale
+    # Combine rotations and apply a random scale factor
     scale = torch.FloatTensor(1).uniform_(0.7, 1.4).item()
     R = (Rz @ Ry @ Rx) * scale
 
-    # Random translation (±10% of volume)
+    # Shift the image slightly (up to 10% translation)
     shift = torch.FloatTensor(3).uniform_(-0.1, 0.1)
 
-    # Build [B, 3, 4] affine matrix
+    # Construct the final affine matrix
     B = image.shape[0]
     theta = torch.zeros(B, 3, 4)
     theta[:, :3, :3] = R
     theta[:, :, 3] = shift
 
+    # Apply the transformation grid
     grid = F.affine_grid(theta.to(image.device), image.shape, align_corners=False)
+    
+    # We use bilinear for the smooth MRI image, but nearest-neighbor for the binary mask
     image = F.grid_sample(image, grid, mode='bilinear', padding_mode='zeros', align_corners=False)
     mask = F.grid_sample(mask, grid, mode='nearest', padding_mode='zeros', align_corners=False)
 
     return image, mask
 
 
-# --- STABILITY CONSTANTS ---
-CONFIRM_EPOCHS = 5    # Consecutive epochs above threshold before advancing
-BLEND_EPOCHS = 30     # Epochs to linearly interpolate weights during transition
-EMA_ALPHA = 0.1       # Smoothing factor for rolling dice (lower = smoother)
-
+# --- Training Stability Constants ---
+CONFIRM_EPOCHS = 5    # Consecutive epochs required above threshold to advance phase.
+BLEND_EPOCHS = 30     # Epoch duration for smoothing loss weight transitions.
+EMA_ALPHA = 0.02      # Smoothing factor for Dice score EMA.
 
 class PhaseManager:
-    """
-    Manages phase transitions with:
-      - Ratchet: once a phase is entered, never retreat
-      - Hysteresis: require CONFIRM_EPOCHS consecutive epochs above threshold
-      - Smooth blending: linearly interpolate weights over BLEND_EPOCHS
-    """
+    """Manages curriculum phases using performance hysteresis and smooth weight blending."""
 
     def __init__(self, config):
-        # Build an ordered list of (name, threshold, weights) from config
+        # We extract our phase definitions from the config YAML
         phases_cfg = config['phases']
         self.phases = []
         for name, data in phases_cfg.items():
             weights = {k: v for k, v in data.items() if k != 'threshold'}
             self.phases.append((name, data['threshold'], weights))
 
-        # Current locked phase index (starts at phase 0)
+        # We start at the easiest phase (index 0)
         self.locked_idx = 0
-
-        # Hysteresis counter: how many consecutive epochs above next threshold
         self.confirm_counter = 0
 
-        # Blending state
+        # Blending State (used when transitioning between phases)
         self.blending = False
-        self.blend_epoch = 0          # Current epoch within the blend window
-        self.prev_weights = None      # Weights we're blending FROM
-        self.target_weights = None    # Weights we're blending TO
+        self.blend_epoch = 0
+        self.prev_weights = None
+        self.target_weights = None
 
     @property
     def current_name(self):
+        """Returns the human-readable string name of our current phase."""
         return self.phases[self.locked_idx][0]
 
     def get_weights(self):
-        """Return the current effective weights (possibly mid-blend)."""
+        """Returns the active loss weights, seamlessly handling mid-phase blends."""
         if not self.blending:
             return dict(self.phases[self.locked_idx][2])
 
-        # Linear interpolation: alpha goes 0 -> 1 over BLEND_EPOCHS
+        # If we are blending, we calculate the alpha step
         alpha = min(self.blend_epoch / BLEND_EPOCHS, 1.0)
         blended = {}
         for key in self.target_weights:
             old_val = self.prev_weights.get(key, 0.0)
             new_val = self.target_weights[key]
+            # Standard linear interpolation
             blended[key] = old_val + alpha * (new_val - old_val)
         return blended
 
     def step(self, ema_dice):
         """
-        Called once per epoch with the EMA dice value.
-        Returns (phase_name, status_message) where status_message is None
-        if nothing notable happened.
+        Evaluates the current moving average of our performance. If it's high enough
+        consistently, we trigger an advancement to the next phase.
         """
         status = None
 
-        # Advance blend counter if blending
+        # Process blending if active
         if self.blending:
             self.blend_epoch += 1
             alpha = min(self.blend_epoch / BLEND_EPOCHS, 1.0)
             status = (f"    >>> BLENDING: {self.phases[self.locked_idx - 1][0]} -> "
                       f"{self.current_name} [epoch {self.blend_epoch}/{BLEND_EPOCHS}, "
-                      f"\u03b1={alpha:.2f}]")
+                      f"a={alpha:.2f}]")
+            
+            # Stop blending once we reach the top
             if self.blend_epoch >= BLEND_EPOCHS:
                 self.blending = False
-                status = (f"    >>> BLEND COMPLETE: fully in {self.current_name}")
+                status = (f"    >>> BLEND COMPLETE: fully running in {self.current_name}")
 
-        # Check if we can advance to the next phase
+        # Review performance for potential advancement
         next_idx = self.locked_idx + 1
         if next_idx < len(self.phases):
             next_threshold = self.phases[next_idx][1]
+            
+            # Are we doing well enough to move on?
             if ema_dice >= next_threshold:
                 self.confirm_counter += 1
                 if self.confirm_counter >= CONFIRM_EPOCHS:
-                    # --- ADVANCE PHASE ---
+                    # Excellent! Lock in the new phase and begin blending.
                     self.prev_weights = dict(self.phases[self.locked_idx][2])
                     self.locked_idx = next_idx
                     self.target_weights = dict(self.phases[self.locked_idx][2])
@@ -200,43 +198,45 @@ class PhaseManager:
                     self.blending = True
                     self.blend_epoch = 0
                     status = (f"    >>> PHASE LOCKED: {self.current_name} "
-                              f"(confirmed {CONFIRM_EPOCHS} epochs above "
-                              f"{next_threshold:.2f})")
+                              f"(Confirmed stable performance above {next_threshold:.2f})")
                 else:
-                    pending = (f"    >>> Phase advance pending: "
-                               f"{self.confirm_counter}/{CONFIRM_EPOCHS} "
-                               f"epochs above {next_threshold:.2f}")
+                    pending = (f"    >>> Phase advance pending... "
+                               f"({self.confirm_counter}/{CONFIRM_EPOCHS} epochs)")
                     status = status + "\n" + pending if status else pending
             else:
-                # Reset counter if dice drops below threshold
+                # If performance drops below the threshold, reset the counter
                 if self.confirm_counter > 0:
                     status_reset = (f"    >>> Advance counter reset "
-                                    f"(EMA dice {ema_dice:.4f} < {next_threshold:.2f})")
+                                    f"(EMA dice dropped below {next_threshold:.2f})")
                     status = status + "\n" + status_reset if status else status_reset
                 self.confirm_counter = 0
 
         return self.current_name, status
 
 
+# --- Utilities ---
+
 def find_latest_checkpoint(save_dir):
+    """Locates the highest epoch checkpoint in the given directory."""
     checkpoints = glob.glob(os.path.join(save_dir, "vae_epoch_*.pth"))
-    if not checkpoints: return None, 0
+    if not checkpoints: 
+        return None, 0
+        
     def extract_epoch(ckpt_path):
         m = re.search(r'vae_epoch_(\d+).pth', ckpt_path)
         return int(m.group(1)) if m else 0
+        
     latest = max(checkpoints, key=extract_epoch)
     return latest, extract_epoch(latest)
 
+
 class SequentialLogger(object):
-    """
-    Logs all training stdout to a numbered file in log_dir.
-    Detects the current max run number from existing files and continues from it.
-    """
+    """T-ees stdout to a sequentially numbered text file to preserve run history."""
     def __init__(self, log_dir):
         os.makedirs(log_dir, exist_ok=True)
         self.terminal = sys.stdout
 
-        # Find the highest existing run number and continue from it
+        # Figure out what run number we are currently on
         existing = glob.glob(os.path.join(log_dir, "vae_run_*.txt"))
         if existing:
             nums = []
@@ -249,7 +249,7 @@ class SequentialLogger(object):
 
         self.log_path = os.path.join(log_dir, f"vae_run_{num}.txt")
         self.log = open(self.log_path, "a", encoding="utf-8")
-        # Write banner to both console and file
+        
         banner = f"--- SPQA VAE TRAINING SESSION {num} ---\n"
         self.terminal.write(banner)
         self.terminal.flush()
@@ -268,19 +268,15 @@ class SequentialLogger(object):
 
 
 def save_visual_check(recon, corr, target, image, epoch, save_dir, sid):
-    """
-    Saves a 3x4 grid visualization:
-      Col 0: MRI + Corrupted Mask (yellow) - what the model receives
-      Col 1: MRI + Ground Truth (green)    - the target
-      Col 2: MRI + VAE Prediction (red)    - the model's output
-      Col 3: Difference Heatmap (hot)      - GT minus Corrupted (what the model must repair)
-    """
+    """Exports a 3x4 slice grid comparing corrupted input, ground truth, and VAE prediction."""
     try:
         os.makedirs(save_dir, exist_ok=True)
         d = image.shape[2]
+        
+        # We capture 3 specific slices along the Z-axis
         slices = [int(d*0.25), int(d*0.5), int(d*0.75)]
         slice_names = ['Inferior', 'Central', 'Superior']
-        col_titles = ['Corrupted Input', 'Ground Truth', 'VAE Prediction', 'GT − Corrupted\n(repair task)']
+        col_titles = ['Corrupted Input', 'Ground Truth', 'VAE Prediction', 'Repair Task']
 
         fig, axes = plt.subplots(3, 4, figsize=(20, 12))
         fig.suptitle(f"VAE Visual Validation | Epoch {epoch:04d} | Subject: {sid}", fontsize=16, fontweight='bold')
@@ -292,112 +288,189 @@ def save_visual_check(recon, corr, target, image, epoch, save_dir, sid):
             pred_prob = torch.sigmoid(recon[0,0,s_idx]).detach().cpu().numpy()
             pred_mask = (pred_prob > 0.40).astype(np.float32)
 
-            # Col 0: Corrupted Input
+            # 1. Overlay the generated corruption (yellow)
             axes[i,0].imshow(img_s, cmap='gray')
             if np.any(corr_np):
-                axes[i,0].imshow(np.ma.masked_where(corr_np < 0.5, corr_np), cmap='autumn', alpha=0.50, vmin=0, vmax=1, interpolation='nearest')
+                axes[i,0].imshow(np.ma.masked_where(corr_np < 0.5, corr_np), cmap='autumn', alpha=0.50, interpolation='nearest')
 
-            # Col 1: Ground Truth
+            # 2. Overlay the pristine ground truth (green)
             axes[i,1].imshow(img_s, cmap='gray')
             if np.any(tgt_np):
-                axes[i,1].imshow(np.ma.masked_where(tgt_np < 0.5, tgt_np), cmap='Greens', alpha=0.50, vmin=0, vmax=1, interpolation='nearest')
+                axes[i,1].imshow(np.ma.masked_where(tgt_np < 0.5, tgt_np), cmap='Greens', alpha=0.50, interpolation='nearest')
 
-            # Col 2: VAE Prediction
+            # 3. Overlay what the VAE *thinks* it looks like (red)
             axes[i,2].imshow(img_s, cmap='gray')
             if np.any(pred_mask):
-                axes[i,2].imshow(np.ma.masked_where(pred_mask < 0.5, pred_mask), cmap='Reds', alpha=0.50, vmin=0, vmax=1, interpolation='nearest')
+                axes[i,2].imshow(np.ma.masked_where(pred_mask < 0.5, pred_mask), cmap='Reds', alpha=0.50, interpolation='nearest')
 
-            # Col 3: Difference Heatmap (GT - Corrupted) — shows what the model must repair
-            # +1 = regions in GT but not in corrupted (erosion damage / missing voxels)
-            # -1 = regions in corrupted but not in GT (dilation artifacts / extra voxels)
+            # 4. Difference Heatmap: displays the literal diff the model needs to fix.
             diff = tgt_np - corr_np
             axes[i,3].imshow(img_s, cmap='gray')
             axes[i,3].imshow(diff, cmap='RdBu', alpha=0.65, vmin=-1, vmax=1, interpolation='nearest')
 
-            # Titles and row labels
+            # Add human readable titles for context
             axes[i,0].set_title(f"{s_name} ({s_idx}) | {col_titles[0]}", fontsize=9)
             axes[i,1].set_title(col_titles[1], fontsize=9)
             axes[i,2].set_title(col_titles[2], fontsize=9)
             axes[i,3].set_title(col_titles[3], fontsize=9)
 
-            for ax in axes[i]: ax.axis('off')
+            for ax in axes[i]: 
+                ax.axis('off')
 
         plt.tight_layout()
         plt.savefig(os.path.join(save_dir, f"epoch_{epoch:04d}_{sid}.png"), dpi=150)
         plt.close(fig)
     except Exception as e:
-        print(f"Visual Error: {e}")
+        print(f"Visualizing failed, continuing anyway. Error: {e}")
+
+
+# --- Main Training Routine ---
 
 def train_vae():
+    """Initializes the VAE environment and executes the training loop."""
+    
+    # Configuration and Environment Setup
     config = load_config(r"C:\Users\Lab\OneDrive\Desktop\SPQA\params\config.yaml")
-    fix_seeds(config['seed']); device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    log_dir, save_dir, vis_dir = [os.path.join(r"C:\Users\Lab\OneDrive\Desktop\SPQA\logs", d) for d in ["training_logs", "vae_checkpoints", "visual_progress"]]
-    for d in [log_dir, save_dir, vis_dir]: os.makedirs(d, exist_ok=True)
+    fix_seeds(config['seed'])
+    
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    
+    log_dir = os.path.join(r"C:\Users\Lab\OneDrive\Desktop\SPQA\logs", "training_logs")
+    save_dir = os.path.join(r"C:\Users\Lab\OneDrive\Desktop\SPQA\logs", "vae_checkpoints")
+    vis_dir = os.path.join(r"C:\Users\Lab\OneDrive\Desktop\SPQA\logs", "visual_progress")
+    
+    for d in [log_dir, save_dir, vis_dir]: 
+        os.makedirs(d, exist_ok=True)
+        
     sys.stdout = SequentialLogger(log_dir)
     
-    # Init VAE3D model
+    # Initialize the 3D-VAE Architecture
     model = VAE3D(
         in_channels=config['model'].get('in_channels', 2),
         out_channels=config['model'].get('out_channels', 1),
         latent_dim=config['model']['latent_dim']
     ).to(device)
     
+    # Reload weights from the last checkpoint if one exists
     ckpt, start_epoch = find_latest_checkpoint(save_dir)
     if ckpt: 
         try:
             model.load_state_dict(torch.load(ckpt, map_location=device), strict=False)
-            print(f"Loaded checkpoint: {ckpt} (strict=False)")
+            print(f"Successfully resumed from checkpoint: {ckpt}")
         except Exception as e:
-            print(f"Warning: Failed to load checkpoint {ckpt}. Starting from scratch. Error: {e}")
+            print(f"Warning: Corrupt checkpoint {ckpt}. Starting fresh. Error: {e}")
             start_epoch = 0
+
+    # Set up optimizer, scaler, and dataloader
     optimizer = optim.Adam(model.parameters(), lr=config['train']['learning_rate'], weight_decay=1e-5)
     criterion = DAELoss(config=config).to(device)
     scaler = GradScaler('cuda')
-    loader = DataLoader(NiftiDataset(img_dir=config['data']['raw_data_root'], list_path=config['data']['training_ids'], image_size=config['model']['image_size']), batch_size=1, shuffle=True)
+    
+    loader = DataLoader(
+        NiftiDataset(
+            img_dir=config['data']['raw_data_root'], 
+            list_path=config['data']['training_ids'], 
+            image_size=config['model']['image_size']
+        ), 
+        batch_size=1, 
+        shuffle=True
+    )
 
-    # --- STABILITY: PhaseManager + EMA ---
+    # Phase management logic to direct curriculum learning
     phase_mgr = PhaseManager(config)
-    ema_dice = 0.0          # EMA-smoothed rolling dice
-    ema_initialized = False  # Bootstrap flag for first epoch
+    ema_dice = 0.0          
+    max_ema_achieved = 0.0  
+    ema_initialized = False  
 
+    print("Beginning Training Loop...")
     for epoch in range(start_epoch, config['train']['epochs']):
-        model.train(); m = {'dice': 0, 'bce': 0, 'contour': 0, 'kld': 0, 'count': 0}
+        model.train()
+        
+        # Reset trackers for this epoch
+        metrics = {'dice': 0.0, 'bce': 0.0, 'contour': 0.0, 'kld': 0.0, 'count': 0}
 
-        # Apply current (possibly blended) weights to the loss function
+        # Synchronize our loss criteria with the phase manager
         criterion.w = phase_mgr.get_weights()
 
         for i, batch in enumerate(loader):
             img = batch['image'].to(device)
+            # Threshold ground truth strictly just in case
             gt = (batch['gt'].to(device) > 0.5).float()
-            img, gt = augment_3d(img, gt)  # Paper-aligned spatial augmentations
-            sid = batch['id'][0]; corr = morphological_corrupt(gt, epoch=epoch, total_epochs=config['train']['epochs'])  # Curriculum corruption
+            
+            # Apply our spatial augmentations
+            img, gt = augment_3d(img, gt)
+            
+            # Identify current corruption difficulty and shatter the input
+            severity = criterion.w.get('corruption_severity', 0.0)
+            corr = morphological_corrupt(gt, severity)
+            
+            # Forward pass wrapped in mixed precision for speed!
             with autocast('cuda'):
                 recon, mu, logvar = model(torch.cat([img, corr], dim=1))
+                
+                # Check dice similarity
                 d_acc = dice_coefficient(torch.sigmoid(recon), gt)
-                # Apply current phase weights
+                
+                # Compute total combined loss
                 loss, _, contour_val, bce_val, kld_val = criterion(recon, gt, mu, logvar)
-            scaler.scale(loss).backward(); scaler.step(optimizer); scaler.update(); optimizer.zero_grad()
-            m['dice'] += d_acc.item(); m['bce'] += bce_val.item(); m['count'] += 1
-            m['contour'] += contour_val.item(); m['kld'] += kld_val.item()
-            if i == 0 and (epoch + 1) % 10 == 0: save_visual_check(recon, corr, gt, img, epoch+1, vis_dir, sid)
+            
+            # If the loss blows up, we discard the batch instead of dying
+            if torch.isnan(loss) or torch.isnan(d_acc):
+                optimizer.zero_grad()
+                continue
+                
+            # Standard backward operations
+            scaler.scale(loss).backward()
+            
+            # Unscale before clipping to ensure math checks out correctly
+            scaler.unscale_(optimizer)
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+            
+            scaler.step(optimizer)
+            scaler.update()
+            optimizer.zero_grad()
+                
+            # Log metrics for our end-of-epoch report
+            metrics['dice'] += d_acc.item() 
+            metrics['bce'] += bce_val.item() 
+            metrics['contour'] += contour_val.item() 
+            metrics['kld'] += kld_val.item()
+            metrics['count'] += 1
+            
+            # Save visual debug grids every 10 epochs using the first batch
+            if i == 0 and (epoch + 1) % 10 == 0: 
+                sid = batch['id'][0]
+                save_visual_check(recon, corr, gt, img, epoch+1, vis_dir, sid)
 
-        # --- EMA rolling dice ---
-        epoch_dice = m['dice'] / m['count']
+        # Ensure we didn't just crash out of an entire epoch
+        if metrics['count'] == 0:
+            print(f"Epoch {epoch+1:03d} | SKIPPED (All batches produced NaN)")
+            continue
+
+        # Smooth out our Dice performance reporting
+        epoch_dice = metrics['dice'] / metrics['count']
         if not ema_initialized:
             ema_dice = epoch_dice
             ema_initialized = True
         else:
             ema_dice = EMA_ALPHA * epoch_dice + (1 - EMA_ALPHA) * ema_dice
+            
+        if epoch > 10:
+            max_ema_achieved = max(max_ema_achieved, ema_dice)
 
-        # --- Phase transition check ---
+        # Feed performance back to phase manager
         current_phase, phase_status = phase_mgr.step(ema_dice)
 
-        n = m['count']
-        print(f"Epoch {epoch+1:03d} | {current_phase} | Dice: {epoch_dice:.4f} | EMA: {ema_dice:.4f} | BCE: {m['bce']/n:.4f}")
-        print(f"    > Breakdown: Contour: {m['contour']/n:.4f} | KLD: {m['kld']/n:.4f}")
+        # Output detailed epoch findings
+        n = metrics['count']
+        print(f"Epoch {epoch+1:03d} | {current_phase} | Dice: {epoch_dice:.4f} | EMA: {ema_dice:.4f} | BCE: {metrics['bce']/n:.4f}")
+        print(f"    > Breakdown: Contour: {metrics['contour']/n:.4f} | KLD: {metrics['kld']/n:.4f}")
         if phase_status:
             print(phase_status)
-        torch.save(model.state_dict(), os.path.join(save_dir, f"vae_epoch_{epoch+1}.pth"))
+            
+        # Snapshot the model weights
+        if (epoch + 1) % 20 == 0:
+            torch.save(model.state_dict(), os.path.join(save_dir, f"vae_epoch_{epoch+1}.pth"))
 
 if __name__ == "__main__":
     train_vae()
