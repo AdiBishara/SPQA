@@ -8,7 +8,7 @@
 
 ---
 
-## 📖 Table of Contents
+## Table of Contents
 1. [Methodology](#methodology)
 2. [Repository Architecture](#repository-architecture)
 3. [Getting Started](#getting-started)
@@ -18,7 +18,7 @@
 
 ---
 
-## 🧠 Methodology
+## Methodology
 
 The SPQA pipeline is decoupled into two primary components to ensure the quality assurance mechanism remains independent of the segmentation model's internal biases.
 
@@ -35,7 +35,7 @@ The SPQA DAE is trained using a dynamic, curriculum-driven composite loss functi
 
 ---
 
-## 📂 Repository Architecture
+## Repository Architecture
 
 The codebase is organized modularly to support reproducibility and extension.
 
@@ -71,7 +71,7 @@ SPQA/
 
 ---
 
-## 🚀 Getting Started
+## Getting Started
 
 ### Prerequisites
 * **OS:** Linux / Windows
@@ -92,7 +92,7 @@ pip install -r requirements.txt
 
 ---
 
-## 💽 Dataset Preparation
+## Dataset Preparation
 
 This project natively supports the **SynthStrip v1.5** brain extraction dataset. 
 
@@ -113,7 +113,7 @@ synthstrip_data_v1.5/
 
 ---
 
-## 🔬 Reproducing the Pipeline
+## Reproducing the Pipeline
 
 The framework is strictly driven by the hyperparameters configured in `params/config.yaml`. Adjust batch sizes according to your hardware limits before running the scripts below.
 
@@ -162,7 +162,7 @@ python cp_selector.py
 
 ---
 
-## 📄 Citation & Contact
+## Citation & Contact
 
 If you utilize this codebase or framework for your research, please cite our corresponding paper:
 
