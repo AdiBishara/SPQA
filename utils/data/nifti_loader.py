@@ -25,11 +25,14 @@ class NiftiDataset(Dataset):
             img_path = os.path.join(self.data_root, subject_id, "image.nii.gz")
             pl_path = os.path.join(self.data_root, subject_id, "pseudo_label.nii.gz")
             truth_path = os.path.join(self.data_root, subject_id, "truth.nii.gz")
+
             if not os.path.exists(img_path):
                 img_path = img_path.replace(".nii.gz", ".nii")
                 pl_path = pl_path.replace(".nii.gz", ".nii")
                 truth_path = truth_path.replace(".nii.gz", ".nii")
+
             self.file_list.append((img_path, pl_path, truth_path, subject_id))
+
         print(f"--- SPQA Breakout Loader (Foreground-Normalized | DAE Mode) ---")
 
     def __len__(self):
@@ -81,16 +84,22 @@ class NiftiDataset(Dataset):
             gt = (gt_obj.get_fdata() > 0.5).astype(np.float32)
 
             # --- BREAKOUT NORMALIZATION: FOREGROUND ONLY ---
-            # Identifies brain tissue, applies Z-score normalization strictly to foreground,
-            # clips outliers (-3 to +3 SD), suppresses background noise, and scales to [0, 1].
+            # Identify actual brain tissue (non-zero intensity)
             foreground_mask = img > 0
             foreground_voxels = img[foreground_mask]
 
             if len(foreground_voxels) > 0:
+                # 1. Z-Score using ONLY tissue stats to ignore 'air' noise
                 mean, std = foreground_voxels.mean(), foreground_voxels.std()
                 img = (img - mean) / (std + 1e-8)
+
+                # 2. Hard-Clip anatomical range (-3 to +3 SD)
                 img = np.clip(img, -3.0, 3.0)
+
+                # 3. Background Suppression: Set all air/noise to the floor
                 img[~foreground_mask] = -3.0
+
+                # 4. Final Min-Max scale to [0, 1]
                 img = (img - img.min()) / (img.max() - img.min() + 1e-8)
             else:
                 img = np.zeros_like(img)

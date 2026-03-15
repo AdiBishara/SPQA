@@ -330,7 +330,7 @@ def train_vae():
     """Initializes the VAE environment and executes the training loop."""
     
     # Configuration and Environment Setup
-    config = load_config(r"C:\Users\Lab\OneDrive\Desktop\SPQA\params\config.yaml")
+    config = load_config(r"C:\Users\Lab\OneDrive\Desktop\SPQA\params\vae_config.yaml")
     fix_seeds(config['seed'])
     
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

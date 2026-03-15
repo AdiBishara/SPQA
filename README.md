@@ -44,7 +44,8 @@ SPQA/
 ├── losses/
 │   └── losses.py                # Implementation of DAELoss, boundary contour, and Dice metrics
 ├── params/
-│   └── config.yaml              # Centralized hyperparameters and phased-training curriculum
+│   ├── config.yaml              # Centralized hyperparameters for U-Net/DAE training
+│   └── vae_config.yaml          # Hyperparameters for the VAE baseline
 ├── utils/
 │   ├── data/
 │   │   └── nifti_loader.py      # Dataloaders for 3D NIfTI volumes (SynthStrip)
